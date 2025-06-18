@@ -15,33 +15,15 @@ Future<void> launchProductUrl(String url) async {
   }
   try {
     await launchUrl(uri, mode: LaunchMode.externalApplication);
-  } catch (e) {
-    print("❌ launchUrl 예외: $e");
-  }
+  } catch (_) {}
 }
 
-// 찜 관리
-// 찜 등록
-// Future<void> saveLikedRecommendation(
-//   String styleKey,
-//   Map<String, dynamic> styleData,
-// ) async {
-//   final prefs = await SharedPreferences.getInstance();
-//   final savedJson = prefs.getString('liked_recommendations');
-//   final Map<String, dynamic> savedMap =
-//       savedJson != null ? jsonDecode(savedJson) : {};
-//
-//   savedMap[styleKey] = styleData;
-//
-//   await prefs.setString('liked_recommendations', jsonEncode(savedMap));
-// }
 Future<void> addFavoriteCoordination({
   required Map<String, String> outfit,
   required LoginStateManager loginStateManager,
 }) async {
   final authToken = loginStateManager.accessToken;
   if (authToken == null) {
-    print("🚫 인증 토큰 없음. 찜 등록 중단");
     return;
   }
 
@@ -66,34 +48,16 @@ Future<void> addFavoriteCoordination({
     final response = await request.send();
     if (response.statusCode == 200) {
       final responseBody = await response.stream.bytesToString();
-      print('✅ 찜 등록 성공: $responseBody');
-      print("🧥 서버 전송 outfit: $outfit");
-    } else {
-      print('❌ 찜 등록 실패: ${response.statusCode} ${response.reasonPhrase}');
     }
-  } catch (e) {
-    print('🚨 예외 발생: $e');
-  }
+  } catch (_) {}
 }
 
-//찜 해제 시 해당 스타일 제거
-// Future<void> removeLikedRecommendation(String styleKey) async {
-//   final prefs = await SharedPreferences.getInstance();
-//   final savedJson = prefs.getString('liked_recommendations');
-//   final Map<String, dynamic> savedMap =
-//       savedJson != null ? jsonDecode(savedJson) : {};
-//
-//   savedMap.remove(styleKey);
-//
-//   await prefs.setString('liked_recommendations', jsonEncode(savedMap));
-// }
 Future<void> removeFavoriteCoordination({
   required String coordinationId,
   required LoginStateManager loginStateManager,
 }) async {
   final authToken = loginStateManager.accessToken;
   if (authToken == null) {
-    print("🚫 인증 토큰 없음. 찜 삭제 중단");
     return;
   }
 
@@ -110,9 +74,6 @@ Future<void> removeFavoriteCoordination({
     final response = await request.send();
     if (response.statusCode == 200) {
       final responseBody = await response.stream.bytesToString();
-      print('🗑️ 찜 삭제 성공: $responseBody');
-    } else {
-      print('❌ 찜 삭제 실패: ${response.statusCode} ${response.reasonPhrase}');
     }
   } catch (_) {}
 }
@@ -139,7 +100,6 @@ Future<void> sendOutfitFeedback({
 }) async {
   final authToken = loginStateManager.accessToken;
   if (authToken == null) {
-    print("🚫 인증 토큰 없음. 피드백 전송 중단");
     return;
   }
   final backendIp = dotenv.env['BACKEND_IP_REC'] ?? 'default_ip_address';
@@ -150,11 +110,6 @@ Future<void> sendOutfitFeedback({
   };
 
   final body = jsonEncode({"outfit": outfit, "feedback": feedback});
-  // 디버그 로그 출력
-  print('📤 피드백 전송 요청');
-  print('🧥 outfit: $outfit');
-  print('💬 feedback: $feedback');
-  print('🔗 POST $uri');
 
   final request =
       http.Request('POST', uri)
@@ -165,9 +120,6 @@ Future<void> sendOutfitFeedback({
 
   if (response.statusCode == 200) {
     final responseBody = await response.stream.bytesToString();
-    print('📩 피드백 전송 성공: $responseBody');
-  } else {
-    print('❌ 피드백 전송 실패: ${response.statusCode} ${response.reasonPhrase}');
   }
 }
 
@@ -199,7 +151,6 @@ class _StyleRecommendationViewState extends State<StyleRecommendationView> {
               styleData['clothes'] ?? {},
             );
 
-            // final isLiked = likedStyles[styleKey] ?? false;
             final isLiked = Provider.of<FavoriteProvider>(
               context,
             ).isFavorite(styleKey);
@@ -210,7 +161,6 @@ class _StyleRecommendationViewState extends State<StyleRecommendationView> {
             return Padding(
               padding: const EdgeInsets.symmetric(vertical: 12.0),
               child: Card(
-                // color:  Colors.white,
                 elevation: 2,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(10),
@@ -227,7 +177,7 @@ class _StyleRecommendationViewState extends State<StyleRecommendationView> {
                             child: SingleChildScrollView(
                               scrollDirection: Axis.horizontal,
                               child: Text(
-                                "💫 $title", //🌿
+                                "💫 $title",
                                 style: Theme.of(context).textTheme.titleMedium,
                                 overflow: TextOverflow.ellipsis,
                                 maxLines: 1,
@@ -235,73 +185,7 @@ class _StyleRecommendationViewState extends State<StyleRecommendationView> {
                             ),
                           ),
                           SizedBox(width: 4), // 여유 공간 확보
-                          // IconButton(
-                          //   icon: Icon(
-                          //     widget.isLikedView
-                          //         ? Icons.delete_outline_outlined
-                          //         : (isLiked
-                          //             ? Icons.favorite
-                          //             : Icons.favorite_border),
-                          //     color:
-                          //         widget.isLikedView
-                          //             ? const Color.fromARGB(255, 61, 61, 61)
-                          //             : (isLiked ? Colors.red : null),
-                          //   ),
-                          //   onPressed: () async {
-                          //     if (widget.isLikedView) {
-                          //       final confirmed = await showDialog<bool>(
-                          //         context: context,
-                          //         builder:
-                          //             (ctx) => AlertDialog(
-                          //               title: Text("정말 삭제하시겠습니까?"),
-                          //               content: Text("찜한 스타일이 목록에서 제거됩니다."),
-                          //               actions: [
-                          //                 TextButton(
-                          //                   child: Text("취소"),
-                          //                   onPressed:
-                          //                       () => Navigator.of(
-                          //                         ctx,
-                          //                       ).pop(false),
-                          //                 ),
-                          //                 TextButton(
-                          //                   child: Text("삭제"),
-                          //                   onPressed:
-                          //                       () =>
-                          //                           Navigator.of(ctx).pop(true),
-                          //                 ),
-                          //               ],
-                          //             ),
-                          //       );
-                          //
-                          //       if (confirmed == true) {
-                          //         removeLikedRecommendation(
-                          //           styleKey,
-                          //         ); // 저장소에서 제거
-                          //         setState(() {
-                          //           likedStyles.remove(styleKey); // 내부 상태에서도 제거
-                          //           widget.responseData.remove(
-                          //             styleKey,
-                          //           ); // View에서도 제거
-                          //         });
-                          //         // 3. 안내 메시지
-                          //         ScaffoldMessenger.of(context).showSnackBar(
-                          //           SnackBar(content: Text("삭제되었습니다.")),
-                          //         );
-                          //       }
-                          //     } else {
-                          //       setState(() {
-                          //         likedStyles[styleKey] = !isLiked;
-                          //       });
-                          //       if (!isLiked) {
-                          //         saveLikedRecommendation(styleKey, styleData);
-                          //       } else {
-                          //         removeLikedRecommendation(styleKey);
-                          //       }
-                          //     }
-                          //   },
-                          // ),
-
-                          // 찜 버튼////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+                          // 찜 버튼
                           IconButton(
                             icon: Icon(
                               isLiked ? Icons.favorite : Icons.favorite_border,
@@ -387,8 +271,6 @@ class _StyleRecommendationViewState extends State<StyleRecommendationView> {
                                               '🔗 판매처',
                                               style: TextStyle(
                                                 color: Colors.blue,
-                                                // decoration:
-                                                //     TextDecoration.underline,
                                               ),
                                             ),
                                           ),
@@ -407,12 +289,9 @@ class _StyleRecommendationViewState extends State<StyleRecommendationView> {
                         children: [
                           TextButton.icon(
                             onPressed: () async {
-                              // ✅ 현재 포커스를 가지고 있는 위젯을 찾아 unfocus
                               FocusNode? currentFocus =
                                   FocusManager.instance.primaryFocus;
                               currentFocus?.unfocus();
-
-                              // ✅ 약간의 지연 (플러터 내부 포커스 갱신 시간 확보)
                               await Future.delayed(
                                 const Duration(milliseconds: 10),
                               );
@@ -427,7 +306,6 @@ class _StyleRecommendationViewState extends State<StyleRecommendationView> {
                                       )
                                       .cast<String>()
                                       .toList();
-                              // ✅ 포커스 해제
                               showDialog(
                                 context: context,
                                 builder:
@@ -460,17 +338,10 @@ class _StyleRecommendationViewState extends State<StyleRecommendationView> {
                                       ],
                                     ),
                               );
-                              // ✅ 다시 포커스 가능하게 설정
-                              // focusProvider.enableFocus();
                             },
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: Color.fromARGB(
-                                255,
-                                13,
-                                52,
-                                3,
-                              ), // 배경색 변경
-                              foregroundColor: Colors.white, // 텍스트/아이콘 색 변경
+                              backgroundColor: Color.fromARGB(255, 13, 52, 3),
+                              foregroundColor: Colors.white,
                             ),
                             icon: Icon(Icons.image),
                             label: const Text('이미지 확인'),
@@ -548,12 +419,7 @@ class _StyleRecommendationViewState extends State<StyleRecommendationView> {
                                 }
                               },
                               style: ElevatedButton.styleFrom(
-                                backgroundColor: Color.fromARGB(
-                                  255,
-                                  13,
-                                  52,
-                                  3,
-                                ), // 배경색 변경
+                                backgroundColor: Color.fromARGB(255, 13, 52, 3),
                                 foregroundColor: Colors.white,
                               ),
                               icon: Icon(Icons.edit_square),
