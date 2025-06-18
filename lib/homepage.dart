@@ -1,5 +1,6 @@
 import 'package:chat_v0/community/community_main_page.dart';
-import 'package:chat_v0/liked/liked_recommendation_page.dart';
+import 'package:chat_v0/community/post_upload.dart';
+import 'package:chat_v0/liked/favorite_page.dart';
 import 'package:chat_v0/menu/layout.dart';
 import 'package:chat_v0/recommendation/get_data.dart';
 import 'package:chat_v0/wardrobe/wardrobe_main_page.dart';
@@ -15,9 +16,11 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> {
   int _selectedIndex = 0;
   final GlobalKey<WardrobeMainPageState> _wardrobeKey = GlobalKey();
+  final GlobalKey<CommunityMainPageState> _communityKey =
+      GlobalKey<CommunityMainPageState>();
   late List<Widget> _pages;
 
-  // 각 텝의 title 👔❤️
+  // 각 텝의 title
   final List<String> _appBarTitles = ['옷장', '즐겨찾기', '커뮤니티'];
 
   @override
@@ -25,8 +28,8 @@ class _HomePageState extends State<HomePage> {
     super.initState();
     _pages = [
       WardrobeMainPage(key: _wardrobeKey),
-      LikedRecommendationsPage(),
-      CommunityPage(),
+      FavoritePage(),
+      CommunityMainPage(key: _communityKey),
     ];
   }
 
@@ -40,8 +43,7 @@ class _HomePageState extends State<HomePage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        scrolledUnderElevation: 0, // 스크롤해도 절대 변화 없음
-        // backgroundColor: Colors.white12, // 🔒 색 고정
+        scrolledUnderElevation: 0,
         elevation: 0,
         leading: IconButton(
           onPressed: () {
@@ -53,18 +55,29 @@ class _HomePageState extends State<HomePage> {
           _appBarTitles[_selectedIndex],
           style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
         ),
-        // centerTitle: true,
         actions: [
           if (_selectedIndex == 0)
             IconButton(
               icon: Icon(Icons.create_new_folder),
               onPressed: () {
-                _wardrobeKey.currentState?.showCreateWardrobeDialog(); // ✅ 호출!
+                _wardrobeKey.currentState?.showCreateWardrobeDialog();
+              },
+            ),
+          if (_selectedIndex == 2)
+            IconButton(
+              icon: Icon(Icons.mode_edit_rounded),
+              onPressed: () async {
+                final result = await Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const PostUploadScreen()),
+                );
+                if (result == true) {
+                  _communityKey.currentState?.refreshPosts();
+                }
               },
             ),
           TextButton(
             onPressed: () {
-              // 👉 추천받기 화면으로 이동 (하단 탭 없이)
               Navigator.push(
                 context,
                 MaterialPageRoute(builder: (context) => RecommendationPage()),
@@ -81,11 +94,10 @@ class _HomePageState extends State<HomePage> {
       ),
       body: _pages[_selectedIndex], // 선택된 페이지 표시
       bottomNavigationBar: BottomNavigationBar(
-        // backgroundColor: ColorScheme.inver,
         currentIndex: _selectedIndex,
         onTap: _onItemTapped,
-        selectedItemColor: Color.fromARGB(255, 10, 59, 55), // 선택된 아이템 색
-        unselectedItemColor: Colors.grey[500], // 선택 안 된 아이템 색
+        selectedItemColor: Color.fromARGB(255, 10, 59, 55),
+        unselectedItemColor: Colors.grey[500],
         selectedFontSize: 12,
         unselectedFontSize: 10,
         type: BottomNavigationBarType.fixed,

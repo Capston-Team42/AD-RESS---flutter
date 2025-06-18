@@ -4,7 +4,7 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 
 class DeleteAccountScreen extends StatefulWidget {
-  final String token; // 로그인 시 발급된 JWT 토큰
+  final String token;
 
   const DeleteAccountScreen({super.key, required this.token});
 
@@ -39,7 +39,7 @@ class _DeleteAccountScreenState extends State<DeleteAccountScreen> {
 
     if (confirmed != true) return;
 
-    final backendIp = dotenv.env['BACKEND_IP'] ?? 'default_ip_address';
+    final backendIp = dotenv.env['BACKEND_IP_REC'] ?? 'default_ip_address';
     final uri = Uri.parse('http://$backendIp:8080/api/user/delete-account');
     final response = await http.delete(
       uri,
@@ -58,8 +58,7 @@ class _DeleteAccountScreenState extends State<DeleteAccountScreen> {
         _messageColor = Colors.green;
       });
 
-      // TODO: 초기화 및 로그인 화면으로 이동
-      // Navigator.pushNamedAndRemoveUntil(context, '/signin', (_) => false);
+      Navigator.pushNamedAndRemoveUntil(context, '/signup', (route) => false);
     } else {
       setState(() {
         _message = data['message'] ?? '계정 삭제에 실패했습니다.';
@@ -89,8 +88,10 @@ class _DeleteAccountScreenState extends State<DeleteAccountScreen> {
             const SizedBox(height: 20),
             ElevatedButton(
               onPressed: _deleteAccount,
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-              child: const Text('계정 삭제'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Color.fromARGB(255, 13, 52, 3),
+              ),
+              child: const Text('계정 삭제', style: TextStyle(color: Colors.white)),
             ),
             const SizedBox(height: 12),
             Text(_message, style: TextStyle(color: _messageColor)),

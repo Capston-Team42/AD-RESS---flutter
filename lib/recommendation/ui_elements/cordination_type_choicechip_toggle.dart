@@ -55,7 +55,6 @@ class _CoordinationDropdownState extends State<CoordinationDropdown> {
       builder:
           (context) => Stack(
             children: [
-              // ✅ 외부 터치 감지 영역
               Positioned.fill(
                 child: GestureDetector(
                   onTap: _removeOverlay,
@@ -63,7 +62,6 @@ class _CoordinationDropdownState extends State<CoordinationDropdown> {
                   child: const SizedBox.expand(),
                 ),
               ),
-              // ✅ 목록
               Positioned(
                 left: offset.dx,
                 top:

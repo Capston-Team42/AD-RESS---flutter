@@ -1,5 +1,5 @@
-// 📁 item_update_page.dart
-import 'package:chat_v0/units/item_field_utils.dart';
+import 'package:chat_v0/providers/wardobe_provider.dart';
+import 'package:chat_v0/units/item_field.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:chat_v0/models/item_model.dart';
@@ -26,12 +26,18 @@ class _ItemUpdatePageState extends State<ItemUpdatePage> {
   late final String? _type;
   late final List<String> _fields;
 
+  late String _selectedWardrobeId;
+  List<Wardrobe> _wardrobes = [];
+  bool _isLoadingWardrobes = true;
+
   @override
   void initState() {
     super.initState();
     _originalData = widget.item.getDataMap();
     _type = _originalData['type'];
     _fields = fieldsByType[_type] ?? [];
+
+    _selectedWardrobeId = widget.wardrobe.id;
 
     final combinedDropdownFields = {
       ...fixedOptions,
@@ -61,6 +67,19 @@ class _ItemUpdatePageState extends State<ItemUpdatePage> {
         _controllers[field] = TextEditingController(text: value);
       }
     }
+
+    Future.microtask(() async {
+      final wardrobeProvider = Provider.of<WardrobeProvider>(
+        context,
+        listen: false,
+      );
+      await wardrobeProvider.fetchWardrobes();
+      if (!mounted) return;
+      setState(() {
+        _wardrobes = wardrobeProvider.wardrobes;
+        _isLoadingWardrobes = false;
+      });
+    });
   }
 
   @override
@@ -69,6 +88,12 @@ class _ItemUpdatePageState extends State<ItemUpdatePage> {
       controller.dispose();
     }
     super.dispose();
+  }
+
+  String getLabelByField(String field, String value) {
+    final fieldMap = categorizedLabelMapping[field];
+    final label = fieldMap != null ? fieldMap[value] : null;
+    return label != null ? '$value ($label)' : value;
   }
 
   Widget _buildTextField(String fieldName) {
@@ -98,7 +123,12 @@ class _ItemUpdatePageState extends State<ItemUpdatePage> {
         ),
         items:
             options
-                .map((e) => DropdownMenuItem(value: e, child: Text(e)))
+                .map(
+                  (e) => DropdownMenuItem(
+                    value: e,
+                    child: Text(getLabelByField(fieldName, e)),
+                  ),
+                )
                 .toList(),
         onChanged: (value) {
           setState(() {
@@ -128,7 +158,7 @@ class _ItemUpdatePageState extends State<ItemUpdatePage> {
                 options.map((option) {
                   final isSelected = selected.contains(option);
                   return ChoiceChip(
-                    label: Text(option),
+                    label: Text(getLabelByField(fieldName, option)),
                     selected: isSelected,
                     onSelected: (selectedNow) {
                       setState(() {
@@ -197,13 +227,7 @@ class _ItemUpdatePageState extends State<ItemUpdatePage> {
     return const SizedBox.shrink();
   }
 
-  void _submit() {
-    debugPrint("✅ _submit 직접 호출됨");
-  }
-
   Future<void> _submitUpdate() async {
-    debugPrint("✅ _submitUpdate 시작");
-
     final itemProvider = Provider.of<ItemProvider>(context, listen: false);
     final itemId = widget.item.id;
 
@@ -224,6 +248,10 @@ class _ItemUpdatePageState extends State<ItemUpdatePage> {
       }
     }
 
+    if (_selectedWardrobeId != widget.wardrobe.id) {
+      updatedFields['wardrobeId'] = _selectedWardrobeId;
+    }
+
     if (updatedFields.isEmpty) {
       ScaffoldMessenger.of(
         context,
@@ -231,50 +259,13 @@ class _ItemUpdatePageState extends State<ItemUpdatePage> {
       return;
     }
 
-    // showDialog(
-    //   context: context,
-    //   barrierDismissible: false,
-    //   builder:
-    //       (_) => const AlertDialog(
-    //         content: Row(
-    //           children: [
-    //             CircularProgressIndicator(),
-    //             SizedBox(width: 16),
-    //             Text("수정 중..."),
-    //           ],
-    //         ),
-    //       ),
-    // );
-
     final success = await itemProvider.updateItem(
       itemId: itemId,
       updatedFields: updatedFields,
     );
-    // if (success && context.mounted) {
-    //   // Navigator.of(context).pop(); // 로딩 다이얼로그 닫기
-
-    //   ScaffoldMessenger.of(context).showSnackBar(
-    //     const SnackBar(
-    //       content: Text("✅ 수정이 완료되었습니다!"),
-    //       duration: Duration(seconds: 1), // 1초 후 자동 사라짐
-    //     ),
-    //   );
-
-    //   await Future.delayed(const Duration(seconds: 5));
-    //   // if (context.mounted) Navigator.of(context).pop(true); // 페이지 뒤로 가기
-    // }
 
     if (success) {
       Navigator.of(context).pop(true);
-
-      // ScaffoldMessenger.of(context).showSnackBar(
-      //   const SnackBar(
-      //     content: Text("✅ 수정이 완료되었습니다!"),
-      //     duration: Duration(seconds: 1), // 1초 후 자동 사라짐
-      //   ),
-      // );
-      // await Future.delayed(const Duration(seconds: 5));
-      // if (context.mounted) Navigator.of(context).pop(true);
     }
   }
 
@@ -299,12 +290,41 @@ class _ItemUpdatePageState extends State<ItemUpdatePage> {
             Image.network(_originalData['imageUrl'], height: 200),
             const SizedBox(height: 16),
             ..._fields.map(_buildAutoField),
+
+            const SizedBox(height: 16),
+            if (_isLoadingWardrobes)
+              const Center(child: CircularProgressIndicator())
+            else
+              Padding(
+                padding: const EdgeInsets.only(bottom: 16),
+                child: DropdownButtonFormField<String>(
+                  value: _selectedWardrobeId,
+                  decoration: const InputDecoration(
+                    labelText: '옷장 선택',
+                    border: OutlineInputBorder(),
+                  ),
+                  items: [
+                    const DropdownMenuItem(
+                      value: 'all',
+                      enabled: false,
+                      child: SizedBox.shrink(),
+                    ),
+                    ..._wardrobes.map((w) {
+                      return DropdownMenuItem(value: w.id, child: Text(w.name));
+                    }),
+                  ],
+                  onChanged: (value) {
+                    setState(() {
+                      _selectedWardrobeId = value!;
+                    });
+                  },
+                ),
+              ),
+
             const SizedBox(height: 24),
             ElevatedButton(
               onPressed: () async {
-                debugPrint("🟩 버튼 눌림");
                 await _submitUpdate();
-                // Navigator.of(context).pop(true);
               },
               child: const Text('수정하기'),
             ),

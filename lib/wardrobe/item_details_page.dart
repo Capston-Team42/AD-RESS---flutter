@@ -1,14 +1,14 @@
 import 'package:chat_v0/models/item_model.dart';
 import 'package:chat_v0/models/wardrobe_model.dart';
 import 'package:chat_v0/providers/item_provider.dart';
-import 'package:chat_v0/units/item_field_utils.dart';
+import 'package:chat_v0/units/item_field.dart';
 import 'package:chat_v0/wardrobe/item_update_page.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 class ItemDetailPage extends StatefulWidget {
   final Item item;
-  final Wardrobe wardrobe; // 수정 페이지로 전달용
+  final Wardrobe wardrobe;
 
   const ItemDetailPage({super.key, required this.item, required this.wardrobe});
 
@@ -17,6 +17,9 @@ class ItemDetailPage extends StatefulWidget {
 }
 
 class _ItemDetailPageState extends State<ItemDetailPage> {
+  double front_width = 30;
+  double back_width = 90;
+
   @override
   Widget build(BuildContext context) {
     final Map<String, dynamic> data = widget.item.getDataMap();
@@ -41,7 +44,7 @@ class _ItemDetailPageState extends State<ItemDetailPage> {
                   ),
                 );
                 if (result == true && mounted) {
-                  Navigator.of(context).pop(true); // 변경 반영 위해 뒤로 감
+                  Navigator.of(context).pop(true);
                 }
               } else if (value == 'delete') {
                 final confirmed = await showDialog<bool>(
@@ -55,7 +58,7 @@ class _ItemDetailPageState extends State<ItemDetailPage> {
                             child: const Text("취소"),
                             onPressed: () => Navigator.of(ctx).pop(false),
                           ),
-                          TextButton(
+                          ElevatedButton(
                             child: const Text("삭제"),
                             onPressed: () => Navigator.of(ctx).pop(true),
                           ),
@@ -79,7 +82,7 @@ class _ItemDetailPageState extends State<ItemDetailPage> {
                               const AlertDialog(content: Text("✅ 삭제되었습니다.")),
                     );
                     await Future.delayed(const Duration(seconds: 1));
-                    if (mounted) Navigator.of(context).pop(true); // 아이템 제거 후 복귀
+                    if (mounted) Navigator.of(context).pop(true);
                   } else {
                     if (mounted) {
                       ScaffoldMessenger.of(
@@ -90,11 +93,10 @@ class _ItemDetailPageState extends State<ItemDetailPage> {
                 }
               }
             },
-
             itemBuilder:
-                (_) => [
-                  const PopupMenuItem(value: 'edit', child: Text('수정')),
-                  const PopupMenuItem(value: 'delete', child: Text('삭제')),
+                (_) => const [
+                  PopupMenuItem(value: 'edit', child: Text('수정')),
+                  PopupMenuItem(value: 'delete', child: Text('삭제')),
                 ],
           ),
         ],
@@ -102,15 +104,101 @@ class _ItemDetailPageState extends State<ItemDetailPage> {
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Image.network(data['imageUrl'], height: 200),
-            const SizedBox(height: 16),
-            ...fields.map((field) => _buildDisplayField(field, data, type)),
-            const SizedBox(height: 24),
+            Center(
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(16),
+                child: Image.network(
+                  data['imageUrl'],
+                  height: 220,
+                  fit: BoxFit.cover,
+                ),
+              ),
+            ),
+            const SizedBox(height: 40),
+
+            // 스타일, 디테일 먼저 표시
+            _buildCombinedStyleField(data),
+
+            // 나머지 필드 표시 (style/detail 제외)
+            ...fields
+                .where(
+                  (field) =>
+                      ![
+                        'style1',
+                        'style2',
+                        'style3',
+                        'detail1',
+                        'detail2',
+                        'detail3',
+                      ].contains(field),
+                )
+                .expand(
+                  (field) => [
+                    _buildDisplayField(field, data, type),
+                    const SizedBox(height: 24), // 줄 사이 간격
+                  ],
+                ),
+            _buildCombinedDetailField(data),
+            const SizedBox(height: 50),
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildCombinedStyleField(Map<String, dynamic> data) {
+    final styles =
+        [
+          data['style1'],
+          data['style2'],
+          data['style3'],
+        ].where((e) => e != null && e.toString().isNotEmpty).toList();
+
+    if (styles.isEmpty) return const SizedBox.shrink();
+
+    final joined = styles.join(', ');
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(width: front_width),
+        SizedBox(width: back_width, child: Text('스타일')),
+        Expanded(child: Text(joined)),
+      ],
+    );
+  }
+
+  Widget _buildCombinedDetailField(Map<String, dynamic> data) {
+    final details =
+        [
+          data['detail1'],
+          data['detail2'],
+          data['detail3'],
+        ].where((e) => e != null && e.toString().isNotEmpty).toList();
+
+    if (details.isEmpty) return const SizedBox.shrink();
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(width: front_width),
+        SizedBox(width: back_width, child: Text('디테일')),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children:
+                details
+                    .map(
+                      (d) => Text(
+                        d.toString(),
+                        style: const TextStyle(height: 1.4),
+                      ),
+                    )
+                    .toList(),
+          ),
+        ),
+      ],
     );
   }
 
@@ -122,72 +210,55 @@ class _ItemDetailPageState extends State<ItemDetailPage> {
     final value = data[key];
     if (value == null || value.toString().isEmpty)
       return const SizedBox.shrink();
+    if (key == 'imageUrl') return const SizedBox.shrink();
 
     final label = labelFor(key);
-    if (key == 'imageUrl') return const SizedBox.shrink();
-    // ✅ seasons: 다중 선택 Chip
+
+    // season 필드 (다중 선택)
     if (key == 'season' && value is List) {
-      return Padding(
-        padding: const EdgeInsets.only(bottom: 12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(label, style: const TextStyle(fontWeight: FontWeight.bold)),
-            const SizedBox(height: 6),
-            Wrap(
-              spacing: 8,
-              children:
-                  value
-                      .map<Widget>((v) => Chip(label: Text(v.toString())))
-                      .toList(),
-            ),
-          ],
-        ),
+      final joined = value.join(', ');
+      return Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(width: front_width),
+          SizedBox(width: back_width, child: Text('계절')),
+          Expanded(child: Text(joined)),
+        ],
       );
     }
 
-    // ✅ 줄글 필드
+    // 줄글 필드
     if (fixedTextFields.contains(key) ||
         (typeSpecificTextFields[type]?.contains(key) ?? false)) {
-      return Padding(
-        padding: const EdgeInsets.only(bottom: 12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(label, style: const TextStyle(fontWeight: FontWeight.bold)),
-            const SizedBox(height: 4),
-            Text(value.toString()),
-          ],
-        ),
-      );
-    }
-
-    // ✅ Boolean 필드
-    if (typeSpecificBooleanFields[type]?.contains(key) ?? false) {
-      final display = (value == true) ? 'yes' : 'no';
-      return Padding(
-        padding: const EdgeInsets.only(bottom: 12),
-        child: Row(
-          children: [
-            Text(
-              '$label: ',
-              style: const TextStyle(fontWeight: FontWeight.bold),
-            ),
-            Text(display),
-          ],
-        ),
-      );
-    }
-
-    // ✅ 기본 단일 텍스트 필드
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: Row(
+      return Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('$label: ', style: const TextStyle(fontWeight: FontWeight.bold)),
-          Text(value.toString()),
+          SizedBox(width: front_width),
+          SizedBox(width: back_width, child: Text(label)),
+          Expanded(child: Text(value.toString())),
         ],
-      ),
+      );
+    }
+
+    // Boolean 필드
+    if (typeSpecificBooleanFields[type]?.contains(key) ?? false) {
+      final display = (value == true) ? 'YES' : 'NO';
+      return Row(
+        children: [
+          SizedBox(width: front_width),
+          SizedBox(width: back_width, child: Text(label)),
+          Text(display),
+        ],
+      );
+    }
+
+    // 일반 필드
+    return Row(
+      children: [
+        SizedBox(width: front_width),
+        SizedBox(width: back_width, child: Text(label)),
+        Expanded(child: Text(value.toString())),
+      ],
     );
   }
 }

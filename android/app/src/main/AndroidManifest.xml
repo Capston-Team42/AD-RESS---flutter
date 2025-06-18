@@ -10,9 +10,10 @@
 
 
     <application
-        android:label="chat_v0"
+        android:label="ad*ress"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher">
+        android:icon="@mipmap/ic_launcher"
+        android:usesCleartextTraffic="true">
         <!-- Google Maps API 키 등록 -->
         <meta-data
             android:name="com.google.android.geo.API_KEY"
@@ -62,5 +63,8 @@
             <action android:name="android.intent.action.PROCESS_TEXT"/>
             <data android:mimeType="text/plain"/>
         </intent>
+        <provider android:authorities="com.android.calendar" />
+        <provider android:authorities="com.samsung.android.calendar" />
+        <provider android:authorities="com.google.android.calendar" />
     </queries>
 </manifest>

@@ -68,7 +68,7 @@ class Item {
       id: json['id'] ?? '',
       userId: json['userId'] ?? '',
       wardrobeId: json['wardrobeId'] ?? '',
-      imageUrl: json['imageUrl'] ?? '', // ✅ 요 부분!
+      imageUrl: json['imageUrl'] ?? '',
       type: json['type'] ?? '',
       color: json['color'],
       style1: json['style1'],
@@ -98,6 +98,7 @@ class Item {
       brightness: json['brightness'],
     );
   }
+
   //데이터 수집 용
   Map<String, dynamic> getDataMap() {
     return {

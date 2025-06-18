@@ -51,7 +51,7 @@ class RoundCheckboxTile extends StatelessWidget {
         ),
       ),
       title: Text(label, style: const TextStyle(fontSize: 14)),
-      onTap: onChanged, // 텍스트 눌러도 반응
+      onTap: onChanged,
     );
   }
 }

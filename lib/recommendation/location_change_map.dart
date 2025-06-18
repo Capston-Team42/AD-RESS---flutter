@@ -58,10 +58,7 @@ class _MapLocationPickerState extends State<MapLocationPicker> {
 
     if (input == null || input.trim().isEmpty) return;
 
-    final result = await _places.findAutocompletePredictions(
-      input.trim(),
-      countries: ['KR'],
-    );
+    final result = await _places.findAutocompletePredictions(input.trim());
 
     if (result.predictions.isEmpty) return;
 
@@ -86,16 +83,12 @@ class _MapLocationPickerState extends State<MapLocationPicker> {
       selected.placeId,
       fields: [PlaceField.Location, PlaceField.Name],
     );
-    print("📦 장소 디테일 도착: ${details.place}");
 
     final latLngRaw = details.place?.latLng;
     final name = details.place?.name;
-    print("📍 이름: $name");
 
     if (latLngRaw != null) {
       final latLng = gmaps.LatLng(latLngRaw.lat, latLngRaw.lng);
-      print("📍 이동할 좌표: $latLng");
-
       _mapController.animateCamera(
         gmaps.CameraUpdate.newLatLngZoom(latLng, 16),
       );
@@ -106,8 +99,6 @@ class _MapLocationPickerState extends State<MapLocationPicker> {
       if (widget.onNameSelected != null && name != null) {
         widget.onNameSelected!(name);
       }
-    } else {
-      print("❗ latLng 정보 없음");
     }
   }
 
@@ -133,12 +124,10 @@ class _MapLocationPickerState extends State<MapLocationPicker> {
                 selectedPosition = position;
                 _selectedPlaceName = null;
               });
-              // 🔄 좌표 → 주소 이름으로 변환
               try {
                 final placemarks = await placemarkFromCoordinates(
                   position.latitude,
                   position.longitude,
-                  // localeIdentifier: 'ko_KR', // 한국어 주소
                 );
                 if (placemarks.isNotEmpty) {
                   final place = placemarks.first;
@@ -152,15 +141,12 @@ class _MapLocationPickerState extends State<MapLocationPicker> {
                   setState(() {
                     _selectedPlaceName = name;
 
-                    // ⬇️ 콜백으로 상위에 전달!
                     if (widget.onNameSelected != null) {
                       widget.onNameSelected!(name);
                     }
                   });
                 }
-              } catch (e) {
-                print("❗ 주소 변환 실패: $e");
-              }
+              } catch (_) {}
             },
             markers:
                 selectedPosition != null

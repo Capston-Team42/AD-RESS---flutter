@@ -47,10 +47,8 @@ class _WardrobeSelectorToggleButtonState
       Offset.zero,
       ancestor: overlayBox,
     );
-    final Size size = buttonBox.size;
     final wardrobes = context.read<WardrobeProvider>().wardrobes;
 
-    // 🟢 단 한 번만 초기 선택되도록
     if (!_hasInitialized) {
       selectedIds = wardrobes.map((w) => w.id).toSet();
       _hasInitialized = true;
@@ -66,9 +64,8 @@ class _WardrobeSelectorToggleButtonState
             children: [
               Positioned(
                 left: position.dx,
-                top: position.dy - popupHeight - 3, // 🔼 위로
+                top: position.dy - popupHeight - 3,
                 child: Material(
-                  // elevation: 50,
                   borderRadius: BorderRadius.circular(8),
                   child: StatefulBuilder(
                     builder: (context, setStateOverlay) {
@@ -87,7 +84,6 @@ class _WardrobeSelectorToggleButtonState
                               offset: Offset(0, 4),
                             ),
                           ],
-                          // border: Border.all(color: Colors.grey.shade200),
                         ),
                         child: ListView(
                           shrinkWrap: true,

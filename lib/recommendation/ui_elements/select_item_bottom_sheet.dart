@@ -2,6 +2,7 @@ import 'package:chat_v0/models/item_model.dart';
 import 'package:chat_v0/providers/item_provider.dart';
 import 'package:chat_v0/providers/wardobe_provider.dart';
 import 'package:flutter/material.dart';
+import 'package:overlay_support/overlay_support.dart';
 import 'package:provider/provider.dart';
 
 class SelectItemBottomSheet extends StatefulWidget {
@@ -34,7 +35,7 @@ class _SelectItemBottomSheetState extends State<SelectItemBottomSheet> {
     );
 
     setState(() => _isLoading = true);
-    if (_selectedWardrobeId == null) {
+    if (_selectedWardrobeId == null || _selectedWardrobeId == 'all') {
       // 전체 아이템
       await itemProvider.fetchAllItems();
       _filteredItems = itemProvider.allItems;
@@ -52,12 +53,13 @@ class _SelectItemBottomSheetState extends State<SelectItemBottomSheet> {
       if (_selectedItems.contains(item)) {
         _selectedItems.remove(item);
       } else {
-        if (_selectedItems.length < 3) {
+        if (_selectedItems.isEmpty) {
           _selectedItems.add(item);
         } else {
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(const SnackBar(content: Text('최대 3개까지만 선택할 수 있어요.')));
+          showSimpleNotification(
+            const Text("최대 1개만 선택할 수 있어요."),
+            background: Color.fromARGB(255, 13, 52, 3),
+          );
         }
       }
     });
@@ -128,10 +130,7 @@ class _SelectItemBottomSheetState extends State<SelectItemBottomSheet> {
               height: 40,
               child: ListView(
                 scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 8,
-                ),
+                padding: const EdgeInsets.symmetric(horizontal: 16),
                 children: [
                   _buildWardrobeChip('전체 의류', null),
                   ...wardrobes.map(

@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:chat_v0/providers/wardobe_provider.dart';
-import 'package:chat_v0/units/item_field_utils.dart';
+import 'package:chat_v0/units/item_field.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:chat_v0/providers/item_provider.dart';
@@ -33,8 +33,6 @@ class _ItemRegisterPageState extends State<ItemRegisterPage> {
     final itemProvider = Provider.of<ItemProvider>(context, listen: false);
     final result = await itemProvider.analyzeImage(widget.image);
     if (result != null && mounted) {
-      debugPrint('🎯 analyze result: ${jsonEncode(result)}'); // ✅ 추가
-
       setState(() {
         _analyzedData = result;
         _isAnalyzing = false;
@@ -53,10 +51,6 @@ class _ItemRegisterPageState extends State<ItemRegisterPage> {
                 value.map((e) => e.toString()),
               );
             }
-            debugPrint('✅ _analyzedData[season]: ${_analyzedData?['season']}');
-            debugPrint(
-              '✅ multiSelectValues[season]: ${multiSelectValues['season']}',
-            );
           } else if (value is String) {
             dropdownValues[field] = value;
           }
@@ -70,6 +64,12 @@ class _ItemRegisterPageState extends State<ItemRegisterPage> {
         }
       });
     }
+  }
+
+  String getLabelByField(String field, String value) {
+    final fieldMap = categorizedLabelMapping[field];
+    final label = fieldMap != null ? fieldMap[value] : null;
+    return label != null ? '$value ($label)' : value;
   }
 
   Widget _buildImageWithOverlay() {
@@ -130,7 +130,12 @@ class _ItemRegisterPageState extends State<ItemRegisterPage> {
         ),
         items:
             options
-                .map((e) => DropdownMenuItem(value: e, child: Text(e)))
+                .map(
+                  (e) => DropdownMenuItem(
+                    value: e,
+                    child: Text(getLabelByField(fieldName, e)),
+                  ),
+                )
                 .toList(),
         onChanged: (value) {
           setState(() {
@@ -157,7 +162,7 @@ class _ItemRegisterPageState extends State<ItemRegisterPage> {
                 options.map((option) {
                   final isSelected = selected.contains(option);
                   return ChoiceChip(
-                    label: Text(option),
+                    label: Text(getLabelByField(fieldName, option)),
                     selected: isSelected,
                     onSelected: (selectedNow) {
                       setState(() {
@@ -251,11 +256,11 @@ class _ItemRegisterPageState extends State<ItemRegisterPage> {
       'userId': userId,
       'wardrobeId': selectedWardrobeId,
     };
-    debugPrint('📤 등록 전 itemData: ${jsonEncode(itemData)}'); // ✅ 추가
+    debugPrint('📤 등록 전 itemData: ${jsonEncode(itemData)}');
 
     final success = await itemProvider.registerItem(itemData);
     if (success && mounted) {
-      Navigator.of(context).pop(); // 등록 중 다이얼로그 닫기
+      Navigator.of(context).pop();
 
       showDialog(
         context: context,
@@ -265,12 +270,12 @@ class _ItemRegisterPageState extends State<ItemRegisterPage> {
 
       await Future.delayed(const Duration(seconds: 1));
       if (mounted) {
-        Navigator.of(context).pop(); // 완료 다이얼로그 닫기
-        Navigator.of(context).pop(true); // 이전 페이지로 이동
+        Navigator.of(context).pop();
+        Navigator.of(context).pop(true);
       }
     } else {
       if (mounted) {
-        Navigator.of(context).pop(); // 등록 중 다이얼로그 닫기
+        Navigator.of(context).pop();
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(const SnackBar(content: Text("❌ 등록 실패")));
@@ -289,13 +294,8 @@ class _ItemRegisterPageState extends State<ItemRegisterPage> {
           _isAnalyzing
               ? Center(
                 child: Column(
-                  /*CircularProgressIndicator()*/
                   mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    _buildImageWithOverlay(), // ✅ 수정된 이미지 위젯
-                    SizedBox(height: 16),
-                    Text('분석 중...'),
-                  ],
+                  children: [_buildImageWithOverlay()],
                 ),
               )
               : SingleChildScrollView(

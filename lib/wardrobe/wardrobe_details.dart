@@ -1,5 +1,6 @@
 import 'package:chat_v0/models/item_model.dart';
 import 'package:chat_v0/models/wardrobe_model.dart';
+import 'package:chat_v0/providers/item_provider.dart';
 import 'package:chat_v0/providers/wardobe_provider.dart';
 import 'package:chat_v0/wardrobe/item_details_page.dart';
 import 'package:flutter/material.dart';
@@ -21,18 +22,28 @@ class WardrobeDetailPage extends StatefulWidget {
 }
 
 class _WardrobeDetailPageState extends State<WardrobeDetailPage> {
-  final backendIp = dotenv.env['BACKEND_IP'] ?? 'default_ip_address';
+  final backendIp = dotenv.env['BACKEND_IP_WAR'] ?? 'default_ip_address';
   List<Item> items = [];
   bool _isLoading = true;
 
   Future<void> _loadItems() async {
-    final provider = Provider.of<WardrobeProvider>(context, listen: false);
-    final result = await provider.fetchItemsByWardrobe(widget.wardrobeId);
+    final wardrobeProvider = Provider.of<WardrobeProvider>(
+      context,
+      listen: false,
+    );
+    final itemProvider = Provider.of<ItemProvider>(context, listen: false);
+
+    setState(() => _isLoading = true);
+
+    if (widget.wardrobeId == 'all') {
+      await itemProvider.fetchAllItems();
+      items = itemProvider.allItems;
+    } else {
+      items = await wardrobeProvider.fetchItemsByWardrobe(widget.wardrobeId);
+    }
+
     if (!mounted) return;
-    setState(() {
-      items = result;
-      _isLoading = false;
-    });
+    setState(() => _isLoading = false);
   }
 
   @override
@@ -44,12 +55,23 @@ class _WardrobeDetailPageState extends State<WardrobeDetailPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text(widget.wardrobeName)),
+      appBar: AppBar(
+        title: Text(
+          widget.wardrobeId == 'all'
+              ? widget.wardrobeName
+              : '${widget.wardrobeName} 옷장',
+        ),
+      ),
+
       body:
           _isLoading
               ? const Center()
               : items.isEmpty
-              ? Center(child: Text('옷장이 비었습니다.'))
+              ? Center(
+                child: Text(
+                  widget.wardrobeId == 'all' ? '옷이 없습니다.' : '옷장이 비었습니다.',
+                ),
+              )
               : GridView.builder(
                 padding: const EdgeInsets.all(16),
                 itemCount: items.length,
@@ -64,7 +86,6 @@ class _WardrobeDetailPageState extends State<WardrobeDetailPage> {
                     id: widget.wardrobeId,
                     name: widget.wardrobeName,
                   );
-                  print("🖼️ imageUrl: ${item.imageUrl}"); //디버깅
                   return GestureDetector(
                     onTap: () async {
                       final result = await Navigator.push(
@@ -82,16 +103,16 @@ class _WardrobeDetailPageState extends State<WardrobeDetailPage> {
                       }
                     },
                     child: Card(
-                      clipBehavior: Clip.antiAlias, // 이미지가 카드 영역을 넘지 않도록 잘라줌
+                      clipBehavior: Clip.antiAlias,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(16),
                       ),
                       child: Center(
                         child: Image.network(
                           item.imageUrl,
-                          height: 150, // 세로 길이 제한
-                          width: double.infinity, // 가로는 꽉 채우되
-                          fit: BoxFit.contain, // 비율 유지하며 중앙에 배치
+                          height: 150,
+                          width: double.infinity,
+                          fit: BoxFit.contain,
                         ),
                       ),
                     ),

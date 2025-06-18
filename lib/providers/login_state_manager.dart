@@ -6,17 +6,20 @@ class LoginStateManager with ChangeNotifier {
   static const _userIdKey = 'userId';
   static const _passwordKey = 'password';
   static const _rememberKey = 'rememberLogin';
+  static const _usernameKey = 'username';
 
   final FlutterSecureStorage _storage = const FlutterSecureStorage();
 
   String? _accessToken;
   String? _userId;
+  String? _username;
   String? _password;
   bool _rememberLogin = false;
 
   /// 현재 토큰 반환
   String? get accessToken => _accessToken;
   String? get userId => _userId;
+  String? get username => _username;
   String? get password => _password;
   bool get rememberLogin => _rememberLogin;
 
@@ -26,6 +29,7 @@ class LoginStateManager with ChangeNotifier {
   /// 앱 시작 시 호출: 저장된 로그인 정보(ID, PW) 불러오기
   Future<void> loadLoginInfo() async {
     _userId = await _storage.read(key: _userIdKey);
+    _username = await _storage.read(key: _usernameKey);
     _password = await _storage.read(key: _passwordKey);
     _accessToken = await _storage.read(key: _tokenKey);
     final rememberStr = await _storage.read(key: _rememberKey);
@@ -44,11 +48,11 @@ class LoginStateManager with ChangeNotifier {
       if (response != null && response.containsKey('token')) {
         _accessToken = response['token'];
         await _storage.write(key: _tokenKey, value: _accessToken);
+        await _storage.write(key: _usernameKey, value: username);
         notifyListeners();
         return true;
       }
     }
-    print("❌자동 로그인 실패");
     return false; // 자동 로그인 실패
   }
 
@@ -56,6 +60,7 @@ class LoginStateManager with ChangeNotifier {
   Future<void> saveLoginData({
     required String token,
     required String userId,
+    required String username,
     required String password,
     required bool rememberLogin,
   }) async {
@@ -63,17 +68,31 @@ class LoginStateManager with ChangeNotifier {
     _userId = userId;
     _password = password;
     _rememberLogin = rememberLogin;
+    _username = username;
     await _storage.write(key: _tokenKey, value: token);
     await _storage.write(key: _rememberKey, value: rememberLogin.toString());
 
     if (rememberLogin) {
       await _storage.write(key: _userIdKey, value: userId);
+      await _storage.write(key: _usernameKey, value: username);
       await _storage.write(key: _passwordKey, value: password);
     } else {
       await _storage.delete(key: _userIdKey);
+      await _storage.delete(key: _usernameKey);
       await _storage.delete(key: _passwordKey);
     }
 
+    notifyListeners();
+  }
+
+  /// 사용자명 변경
+  void setToken(String token) {
+    _accessToken = token;
+    notifyListeners();
+  }
+
+  void setUsername(String name) {
+    _username = name;
     notifyListeners();
   }
 

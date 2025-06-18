@@ -37,7 +37,17 @@ android {
         release {
             // TODO: Add your own signing config for the release build.
             // Signing with the debug keys for now, so `flutter run --release` works.
+
+            // ✅ 릴리즈 빌드에서도 최적화 기능 비활성화
+            isMinifyEnabled = false
+            isShrinkResources = false
+            isDebuggable = false // ⛔ 개발 중 임시 활성화 (배포 전엔 false로 바꿔야 함)
+
+            // 🔽 추후 Proguard를 사용하게 될 경우 사용 (지금은 없어도 됨)
+            // proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            
             signingConfig = signingConfigs.getByName("debug")
+
         }
     }
 }

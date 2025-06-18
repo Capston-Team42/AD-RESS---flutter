@@ -19,6 +19,7 @@ class _SigninScreenState extends State<SigninScreen> {
   bool _rememberMe = false;
   String? _errorMessage;
   bool _isLoading = false;
+  bool _isPasswordVisible = false;
 
   @override
   void initState() {
@@ -28,7 +29,7 @@ class _SigninScreenState extends State<SigninScreen> {
 
     // 기억하기 설정된 경우, 입력 필드 자동 채우기
     if (loginState.rememberLogin) {
-      _usernameController.text = loginState.userId ?? '';
+      _usernameController.text = loginState.username ?? '';
       _passwordController.text = loginState.password ?? '';
       _rememberMe = true;
     }
@@ -40,7 +41,7 @@ class _SigninScreenState extends State<SigninScreen> {
       _errorMessage = null;
     });
 
-    final backendIp = dotenv.env['BACKEND_IP'] ?? 'default_ip_address';
+    final backendIp = dotenv.env['BACKEND_IP_REC'] ?? 'default_ip_address';
     final uri = Uri.parse('http://$backendIp:8080/api/auth/signin');
 
     final response = await http.post(
@@ -55,12 +56,12 @@ class _SigninScreenState extends State<SigninScreen> {
     final data = jsonDecode(utf8.decode(response.bodyBytes));
 
     if (response.statusCode == 200) {
-      // TODO: 로그인 성공 시 홈 화면 등으로 이동
       await Provider.of<LoginStateManager>(
         context,
         listen: false,
       ).saveLoginData(
-        userId: _usernameController.text.trim(),
+        userId: data['id'],
+        username: _usernameController.text.trim(),
         password: _passwordController.text,
         token: data['token'],
         rememberLogin: _rememberMe,
@@ -81,108 +82,186 @@ class _SigninScreenState extends State<SigninScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('로그인')),
-      body: AutofillGroup(
-        child: Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              TextField(
-                controller: _usernameController,
-                decoration: const InputDecoration(
-                  enabledBorder: OutlineInputBorder(
-                    borderSide: BorderSide(
-                      color: Color.fromARGB(255, 218, 230, 219),
-                    ),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderSide: BorderSide(
-                      color: Color.fromARGB(255, 6, 76, 8),
-                    ),
-                  ),
-                  fillColor: Color.fromARGB(255, 232, 246, 232),
-                  filled: true,
-                  hintText: '아이디',
-                  hintStyle: TextStyle(
-                    color: Color.fromARGB(255, 120, 120, 120),
+      body: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () => FocusScope.of(context).unfocus(),
+        child: SafeArea(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(16.0),
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                minHeight:
+                    MediaQuery.of(context).size.height -
+                    MediaQuery.of(context).padding.top -
+                    MediaQuery.of(context).padding.bottom,
+              ),
+              child: IntrinsicHeight(
+                child: AutofillGroup(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const SizedBox(height: 200),
+                      TextField(
+                        controller: _usernameController,
+                        decoration: const InputDecoration(
+                          enabledBorder: OutlineInputBorder(
+                            borderSide: BorderSide(
+                              color: Color.fromARGB(255, 218, 230, 219),
+                            ),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderSide: BorderSide(
+                              color: Color.fromARGB(255, 13, 52, 3),
+                            ),
+                          ),
+                          fillColor: Color.fromARGB(255, 232, 246, 232),
+                          filled: true,
+                          hintText: '아이디',
+                          hintStyle: TextStyle(
+                            color: Color.fromARGB(255, 120, 120, 120),
+                          ),
+                        ),
+                        keyboardType: TextInputType.emailAddress,
+                        autofillHints: const [AutofillHints.username],
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: _passwordController,
+                        decoration: InputDecoration(
+                          enabledBorder: OutlineInputBorder(
+                            borderSide: BorderSide(
+                              color: Color.fromARGB(255, 218, 230, 219),
+                            ),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderSide: BorderSide(
+                              color: Color.fromARGB(255, 13, 52, 3),
+                            ),
+                          ),
+                          fillColor: Color.fromARGB(255, 232, 246, 232),
+                          filled: true,
+                          hintText: '비밀번호',
+                          hintStyle: TextStyle(
+                            color: Color.fromARGB(255, 120, 120, 120),
+                          ),
+                          suffixIcon: IconButton(
+                            icon: Icon(
+                              _isPasswordVisible
+                                  ? Icons.visibility
+                                  : Icons.visibility_off,
+                              color: Colors.grey,
+                            ),
+                            onPressed: () {
+                              setState(() {
+                                _isPasswordVisible = !_isPasswordVisible;
+                              });
+                            },
+                          ),
+                        ),
+                        obscureText: !_isPasswordVisible,
+                        autofillHints: const [AutofillHints.password],
+                      ),
+                      CheckboxListTile(
+                        value: _rememberMe,
+                        onChanged:
+                            (val) => setState(() => _rememberMe = val ?? false),
+                        title: const Text(
+                          '아이디, 비밀번호 기억하기',
+                          style: TextStyle(fontSize: 14),
+                        ),
+                        activeColor: Color.fromARGB(255, 122, 255, 89),
+                        checkColor: Colors.black,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(1),
+                        ),
+                        controlAffinity: ListTileControlAffinity.leading,
+                        contentPadding: EdgeInsets.zero,
+                      ),
+                      if (_errorMessage != null)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 8.0),
+                          child: Text(
+                            _errorMessage!,
+                            style: const TextStyle(color: Colors.red),
+                          ),
+                        ),
+                      const SizedBox(height: 20),
+                      ElevatedButton(
+                        onPressed: _isLoading ? null : _signin,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Color.fromARGB(255, 13, 52, 3),
+                          foregroundColor: Colors.white,
+                        ),
+                        child: const Text('로그인'),
+                      ),
+                      const SizedBox(height: 40),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.start,
+                        children: [
+                          const SizedBox(width: 35),
+                          const SizedBox(
+                            width: 145,
+                            child: Text(
+                              '회원이 아니신가요?',
+                              style: TextStyle(fontSize: 14),
+                            ),
+                          ),
+                          const Icon(
+                            Icons.arrow_right_alt_rounded,
+                            size: 18,
+                            color: Color.fromARGB(255, 13, 52, 3),
+                          ),
+                          TextButton(
+                            onPressed:
+                                () => Navigator.pushNamed(context, '/signup'),
+                            child: const Text(
+                              '회원가입',
+                              style: TextStyle(
+                                color: Color.fromARGB(255, 13, 52, 3),
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.start,
+                        children: [
+                          const SizedBox(width: 35),
+                          const SizedBox(
+                            width: 145,
+                            child: Text(
+                              '비밀번호를 잊으셨나요?',
+                              style: TextStyle(fontSize: 14),
+                            ),
+                          ),
+                          const Icon(
+                            Icons.arrow_right_alt_rounded,
+                            size: 18,
+                            color: Color.fromARGB(255, 13, 52, 3),
+                          ),
+                          TextButton(
+                            onPressed:
+                                () => Navigator.pushNamed(
+                                  context,
+                                  '/forgot-password',
+                                ),
+                            child: const Text(
+                              '비밀번호 찾기',
+                              style: TextStyle(
+                                color: Color.fromARGB(255, 13, 52, 3),
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const Spacer(),
+                    ],
                   ),
                 ),
-                keyboardType: TextInputType.emailAddress,
-                autofillHints: const [AutofillHints.username],
               ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: _passwordController,
-                decoration: const InputDecoration(
-                  enabledBorder: OutlineInputBorder(
-                    borderSide: BorderSide(
-                      color: Color.fromARGB(255, 218, 230, 219),
-                    ),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderSide: BorderSide(
-                      color: Color.fromARGB(255, 6, 76, 8),
-                    ),
-                  ),
-                  fillColor: Color.fromARGB(255, 232, 246, 232),
-                  filled: true,
-                  hintText: '비밀번호',
-                  hintStyle: TextStyle(
-                    color: Color.fromARGB(255, 120, 120, 120),
-                  ),
-                ),
-                obscureText: true,
-                autofillHints: const [AutofillHints.password],
-              ),
-              const SizedBox(height: 3),
-              CheckboxListTile(
-                value: _rememberMe,
-                onChanged: (val) => setState(() => _rememberMe = val ?? false),
-                title: const Text('아이디, 비밀번호 기억하기'),
-                activeColor: Colors.green, // 체크박스 활성화 시 색상
-                checkColor: Colors.white, // 체크 표시 색
-
-                controlAffinity: ListTileControlAffinity.leading,
-                contentPadding: EdgeInsets.zero,
-              ),
-              if (_errorMessage != null)
-                Padding(
-                  padding: const EdgeInsets.only(top: 8.0),
-                  child: Text(
-                    _errorMessage!,
-                    style: const TextStyle(color: Colors.red),
-                  ),
-                ),
-              const SizedBox(height: 16),
-              ElevatedButton(
-                onPressed: _isLoading ? null : _signin,
-                child:
-                    _isLoading
-                        ? const SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                        : const Text('로그인'),
-              ),
-              const SizedBox(height: 16),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  TextButton(
-                    onPressed: () => Navigator.pushNamed(context, '/signup'),
-                    child: const Text('회원가입'),
-                  ),
-                  SizedBox(width: 10),
-                  TextButton(
-                    onPressed:
-                        () => Navigator.pushNamed(context, '/forgot-password'),
-                    child: const Text('비밀번호 찾기'),
-                  ),
-                ],
-              ),
-            ],
+            ),
           ),
         ),
       ),

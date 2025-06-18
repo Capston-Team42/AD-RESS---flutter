@@ -14,14 +14,14 @@ class WardrobeProvider with ChangeNotifier {
 
   List<Wardrobe> get wardrobes => _wardrobes;
 
-  /*옷장 목록 조회*/
+  // 옷장 목록 조회
   Future<void> fetchWardrobes() async {
     final userId = loginStateManager?.userId;
     final authToken = loginStateManager?.accessToken;
 
     if (userId == null) return;
 
-    final backendIp = dotenv.env['BACKEND_IP'] ?? 'default_ip_address';
+    final backendIp = dotenv.env['BACKEND_IP_WAR'] ?? 'default_ip_address';
     final url = Uri.parse('http://$backendIp:8081/api/wardrobes/me');
 
     try {
@@ -30,25 +30,20 @@ class WardrobeProvider with ChangeNotifier {
         headers: {'Authorization': 'Bearer $authToken'},
       );
       if (response.statusCode == 200) {
-        print('✅ 목록 불러오기 성공');
         final List<dynamic> data = jsonDecode(utf8.decode(response.bodyBytes));
         _wardrobes =
             data
                 .map((w) => Wardrobe(id: w['id'], name: w['wardrobeName']))
                 .toList();
         notifyListeners();
-      } else {
-        print('❗ 목록 불러오기 실패: ${response.statusCode}');
       }
-    } catch (e) {
-      print('❗ 서버 연결 실패: $e');
-    }
+    } catch (_) {}
   }
 
-  /*옷장 단위 아이템 조회*/
+  // 옷장 단위 아이템 조회
   Future<List<Item>> fetchItemsByWardrobe(String wardrobeId) async {
     final authToken = loginStateManager?.accessToken;
-    final backendIp = dotenv.env['BACKEND_IP'] ?? 'default_ip_address';
+    final backendIp = dotenv.env['BACKEND_IP_WAR'] ?? 'default_ip_address';
     final url = Uri.parse(
       'http://$backendIp:8081/api/items/wardrobe/$wardrobeId',
     );
@@ -58,27 +53,24 @@ class WardrobeProvider with ChangeNotifier {
         url,
         headers: {'Authorization': 'Bearer $authToken'},
       );
+      print('✅아이템 목록: ${response.body}');
 
       if (response.statusCode == 200) {
         final List<dynamic> data = jsonDecode(utf8.decode(response.bodyBytes));
         return data.map((e) => Item.fromJson(e)).toList();
-      } else {
-        debugPrint('❌ 상태 코드: ${response.statusCode}');
       }
-    } catch (e) {
-      debugPrint('❗ 예외: $e');
-    }
+    } catch (_) {}
 
     return [];
   }
 
-  /*옷장 추가*/
+  // 옷장 추가
   Future<void> addWardrobe(String wardrobeName) async {
     final userId = loginStateManager?.userId;
     final authToken = loginStateManager?.accessToken;
     if (userId == null) return;
 
-    final backendIp = dotenv.env['BACKEND_IP'] ?? 'default_ip_address';
+    final backendIp = dotenv.env['BACKEND_IP_WAR'] ?? 'default_ip_address';
     final url = Uri.parse('http://$backendIp:8081/api/wardrobes');
 
     try {
@@ -91,20 +83,62 @@ class WardrobeProvider with ChangeNotifier {
         body: jsonEncode({'userId': userId, 'wardrobeName': wardrobeName}),
       );
       if (response.statusCode == 200 || response.statusCode == 201) {
-        print('✅ 옷장 추가 성공');
-        await fetchWardrobes(); // ✅ 목록 갱신
+        await fetchWardrobes();
       } else {
         throw Exception('서버 응답 실패');
       }
-    } catch (e) {
-      print('🚨 옷장 추가 실패: $e');
-    }
+    } catch (_) {}
   }
 
-  /*옷장 삭제*/
+  // 옷장 삭제 전 옷 삭제
+  Future<bool> deleteItem(String itemId) async {
+    final authToken = loginStateManager?.accessToken;
+    final backendIp = dotenv.env['BACKEND_IP_WAR'] ?? 'localhost';
+    final uri = Uri.parse('http://$backendIp:8081/api/items/delete/$itemId');
+
+    try {
+      final response = await http.delete(
+        uri,
+        headers: {'Authorization': 'Bearer $authToken'},
+      );
+
+      if (response.statusCode == 200 || response.statusCode == 204) {
+        return true;
+      }
+    } catch (_) {}
+
+    return false;
+  }
+
+  // 옷장 삭제
   Future<void> deleteWardrobe(String wardrobeId) async {
     final authToken = loginStateManager?.accessToken;
-    final backendIp = dotenv.env['BACKEND_IP'] ?? 'default_ip_address';
+    final backendIp = dotenv.env['BACKEND_IP_WAR'] ?? 'default_ip_address';
+
+    final itemUrl = Uri.parse(
+      'http://$backendIp:8081/api/items/wardrobe/$wardrobeId',
+    );
+    try {
+      final itemResponse = await http.get(
+        itemUrl,
+        headers: {'Authorization': 'Bearer $authToken'},
+      );
+
+      if (itemResponse.statusCode == 200) {
+        final List<dynamic> itemData = jsonDecode(
+          utf8.decode(itemResponse.bodyBytes),
+        );
+
+        for (var item in itemData) {
+          final itemId = item['id'];
+          if (itemId != null) {
+            final success = await deleteItem(itemId);
+            if (!success) {}
+          }
+        }
+      } else {}
+    } catch (_) {}
+
     final url = Uri.parse('http://$backendIp:8081/api/wardrobes/$wardrobeId');
 
     try {
@@ -113,24 +147,8 @@ class WardrobeProvider with ChangeNotifier {
         headers: {'Authorization': 'Bearer $authToken'},
       );
       if (response.statusCode == 200 || response.statusCode == 204) {
-        print('✅ 옷장 삭제 성공');
-        await fetchWardrobes(); // ✅ 목록 갱신
-      } else {
-        print('🚨 삭제 실패: ${response.statusCode}');
+        await fetchWardrobes();
       }
-    } catch (e) {
-      print('🚨 삭제 요청 실패: $e');
-    }
-  }
-
-  /*옷장 이름 수정*/
-  void renameWardrobe(String wardrobeId, String newName) {
-    final authToken = loginStateManager?.accessToken;
-    int index = _wardrobes.indexWhere((w) => w.id == wardrobeId);
-    if (index != -1) {
-      _wardrobes[index] = Wardrobe(id: wardrobeId, name: newName);
-      notifyListeners();
-      // TODO: 백엔드 연동 (PATCH or PUT)
-    }
+    } catch (_) {}
   }
 }

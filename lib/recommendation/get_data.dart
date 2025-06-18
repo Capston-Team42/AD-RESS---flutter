@@ -1,6 +1,7 @@
 import 'package:chat_v0/providers/login_state_manager.dart';
-import 'package:chat_v0/menu/location_change_map.dart';
+import 'package:chat_v0/recommendation/location_change_map.dart';
 import 'package:chat_v0/permission.dart';
+import 'package:chat_v0/providers/wardobe_provider.dart';
 import 'package:chat_v0/recommendation/chat_view.dart';
 import 'package:chat_v0/recommendation/ui_elements/cordination_type_choicechip_toggle.dart';
 import 'package:chat_v0/recommendation/ui_elements/loding_card.dart';
@@ -22,11 +23,17 @@ import 'package:provider/provider.dart';
 
 Future<void> _requestCalendarPermission() async {
   var status = await Permission.calendar.status;
-  if (!status.isGranted) {
+  if (status.isDenied || status.isRestricted) {
     status = await Permission.calendar.request();
     if (!status.isGranted) {
-      print("⛔ 캘린더 퍼미션 거부됨");
+      if (status.isPermanentlyDenied) {
+        // 영구 거부 시 설정 페이지로 유도 가능
+        await openAppSettings();
+      }
     }
+  } else if (status.isPermanentlyDenied) {
+    // 앱 설정에서 수동 허용 필요
+    await openAppSettings();
   }
 }
 
@@ -44,11 +51,10 @@ class _RecommendationPageState extends State<RecommendationPage> {
   final FocusNode _inputFocusNode = FocusNode();
   Offset _dragStart = Offset.zero;
   double _headerOffset = 0; // 처음에는 헤더가 완전히 열려있는 상태
-  final backendIp = dotenv.env['BACKEND_IP'];
+  final backendIp = dotenv.env['BACKEND_IP_REC'];
   List<Event> _events = [];
   String? _selectedEventText; // 일정 제목
   String? _customLocationName; // 사용자 입력 위치 이름
-  Event? _selectedEvent;
   Map<String, dynamic>? _analyzedResult;
   int? _temperatureMin;
   int? _temperatureMax;
@@ -62,9 +68,8 @@ class _RecommendationPageState extends State<RecommendationPage> {
   double? _calLon;
   String? _calTargetDate;
   String? _selectedTargetDate;
+  final String _nowDate = DateTime.now().toIso8601String().split("T")[0];
   List<dynamic>? _weather;
-
-  bool useDummyGPT = true;
 
   bool _showEventList = true;
   bool _hasSentRecommendation = false;
@@ -84,12 +89,54 @@ class _RecommendationPageState extends State<RecommendationPage> {
   List<String> selectedWardrobeIds = []; // 선택된 옷장 ID들
   bool useBasicWardrobe = true; // 쇼핑몰 의류 포함 여부
 
-  List<String> _selectedItems = []; // 선택된 옷 ID들들
+  List<String> _selectedItems = []; // 선택된 옷 ID들
 
   bool _isDateListVisible = false;
   String _selectedDateText = '날짜 선택';
 
   bool _ignoreWeather = false;
+
+  String translateWeatherDescription(
+    String description,
+    String main,
+    String date,
+  ) {
+    const translationMap = {
+      'clear sky': '맑음 ☀',
+      'few clouds': '약간의 구름 ☁',
+      'scattered clouds': '흩어진 구름 ☁',
+      'broken clouds': '구름 많음 ☁',
+      'overcast clouds': '흐림',
+      'light rain': '약한 비 ☔',
+      'moderate rain': '보통 비 ☔',
+      'heavy intensity rain': '강한 비 ⛆',
+      'very heavy rain': '매우 강한 비 ⛆',
+      'extreme rain': '극심한 비 ⛆',
+      'freezing rain': '어는 비 ⛆',
+      'light snow': '약한 눈 ❄',
+      'snow': '눈 ❄',
+      'heavy snow': '강한 눈 ☃',
+      'sleet': '진눈깨비 ❄',
+      'shower rain': '소나기 ⛆',
+      'light shower snow': '약한 소나기 눈 ❄',
+      'shower snow': '소나기 눈 ❄',
+      'mist': '안개',
+      'fog': '짙은 안개',
+      'haze': '연무',
+      'smoke': '연기',
+      'thunderstorm': '천둥번개 ⚡',
+    };
+
+    final translated = translationMap[description.toLowerCase()] ?? description;
+    final needsUmbrella = [
+      'rain',
+      'snow',
+      'drizzle',
+      'thunderstorm',
+    ].contains(main.toLowerCase());
+
+    return '$date 날씨: $translated${needsUmbrella ? '\n☂️ 우산을 챙기세요!' : ''}';
+  }
 
   List<Map<String, String>> _getDateValueList() {
     final now = DateTime.now();
@@ -104,15 +151,9 @@ class _RecommendationPageState extends State<RecommendationPage> {
   @override
   void initState() {
     super.initState();
-    _loadEvents();
-    _requestCalendarPermission().then((_) => _loadEvents());
-    WidgetsBinding.instance.addPostFrameCallback((_) async {
-      final allowed = await PermissionManager.checkLocationPermissionOnce();
-      print("📍 위치 권한 상태: $allowed");
-    });
+    _initializePage();
 
     _inputFocusNode.addListener(() {
-      // 포커스 생기면 리스트 숨기기
       if (_inputFocusNode.hasFocus) {
         setState(() {
           _showEventList = false;
@@ -121,24 +162,53 @@ class _RecommendationPageState extends State<RecommendationPage> {
     });
   }
 
-  Future<void> _loadEvents() async {
-    final calResult = await _calendarPlugin.retrieveCalendars();
-    final calendars = calResult.data ?? [];
-    final now = DateTime.now();
-    final end = now.add(Duration(days: 2));
-    List<Event> allEvents = [];
+  Future<void> _initializePage() async {
+    await _requestCalendarPermission();
+    await _loadEvents();
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      final allowed = await PermissionManager.checkLocationPermissionOnce();
+      final wardrobeProvider = context.read<WardrobeProvider>();
 
-    for (var cal in calendars) {
-      final eventResult = await _calendarPlugin.retrieveEvents(
-        cal.id!,
-        RetrieveEventsParams(startDate: now, endDate: end),
-      );
-      allEvents.addAll(eventResult.data ?? []);
-    }
-
-    setState(() {
-      _events = allEvents;
+      if (wardrobeProvider.wardrobes.isNotEmpty) {
+        setState(() {
+          selectedWardrobeIds =
+              wardrobeProvider.wardrobes.map((w) => w.id).toList();
+        });
+      } else {
+        await wardrobeProvider.fetchWardrobes();
+        final loaded = wardrobeProvider.wardrobes;
+        setState(() {
+          selectedWardrobeIds = loaded.map((w) => w.id).toList();
+        });
+      }
     });
+  }
+
+  Future<void> _loadEvents() async {
+    try {
+      final calResult = await _calendarPlugin.retrieveCalendars();
+      final calendars = calResult.data ?? [];
+      final now = DateTime.now();
+      final end = now.add(Duration(days: 2));
+      List<Event> allEvents = [];
+
+      for (var cal in calendars) {
+        if (cal.id == null) {
+          continue;
+        }
+        try {
+          final eventResult = await _calendarPlugin.retrieveEvents(
+            cal.id!,
+            RetrieveEventsParams(startDate: now, endDate: end),
+          );
+          allEvents.addAll(eventResult.data ?? []);
+        } catch (_) {}
+      }
+
+      setState(() {
+        _events = allEvents;
+      });
+    } catch (_) {}
   }
 
   Future<Map<String, dynamic>> _analyzeWithGPT(
@@ -146,118 +216,37 @@ class _RecommendationPageState extends State<RecommendationPage> {
     String? description,
   ) async {
     final prompt = "제목: $title\n설명: ${description ?? ''}";
-    if (useDummyGPT) {
-      print("🧠 [더미 GPT 분석 사용] 제목: $title, 설명: $description");
-      await Future.delayed(Duration(seconds: 1)); // API 시뮬레이션
-
-      // 상황에 맞는 더미 응답 (간단한 조건문 활용 가능)
-      if (title.contains("점심") || description?.contains("밥") == true) {
-        return {"location": "서울 을지로", "time_period": "day", "type": "lunch"};
-      } else if (title.contains("회의") ||
-          description?.contains("프로젝트") == true) {
-        return {"location": "서울 강남역", "time_period": "day", "type": "meeting"};
-      } else {
-        return {"location": "홍대입구", "time_period": "night", "type": "dinner"};
-      }
-    } else {
-      final response = await http.post(
-        Uri.parse('https://api.openai.com/v1/chat/completions'),
-        headers: {
-          'Authorization': 'Bearer ${dotenv.env['OPENAI_API_KEY']}',
-          'Content-Type': 'application/json',
-        },
-        body: jsonEncode({
-          "model": "gpt-4o",
-          "messages": [
-            {
-              "role": "system",
-              "content":
-                  "다음 일정 제목과 설명에서 약속 장소, 시간대(낮/밤), 약속 유형을 JSON으로 추출해줘."
-                  "JSON 키는 영어로 써줘: location, time_period, type.설명 없이 JSON만 반환해."
-                  "마크다운 코드블럭(```json 등)은 절대 포함하지 마.",
-            },
-            {"role": "user", "content": prompt},
-          ],
-        }),
-      );
-      final rawBody = utf8.decode(response.bodyBytes);
-      final body = jsonDecode(rawBody);
-      final content = body['choices'][0]['message']['content'];
-      print("🧠 GPT 응답 원문: $content");
-      final cleaned = content.replaceAll(RegExp(r'```json|```'), '').trim();
-      return jsonDecode(content);
-    }
+    final response = await http.post(
+      Uri.parse('https://api.openai.com/v1/chat/completions'),
+      headers: {
+        'Authorization': 'Bearer ${dotenv.env['OPENAI_API_KEY']}',
+        'Content-Type': 'application/json',
+      },
+      body: jsonEncode({
+        "model": "gpt-4.1",
+        "messages": [
+          {
+            "role": "system",
+            "content":
+                "다음 일정 제목과 설명에서 약속 장소를를 JSON으로 추출해줘."
+                "JSON 키는 영어로 써줘: location.설명 없이 JSON만 반환해."
+                "마크다운 코드블럭(```json 등)은 절대 포함하지 마.",
+          },
+          {"role": "user", "content": prompt},
+        ],
+      }),
+    );
+    final rawBody = utf8.decode(response.bodyBytes);
+    final body = jsonDecode(rawBody);
+    final content = body['choices'][0]['message']['content'];
+    final cleaned = content.replaceAll(RegExp(r'```json|```'), '').trim();
+    return jsonDecode(cleaned);
   }
-
-  // Future<List<dynamic>> _fetchWeather(String? location) async {
-  //   double lat, lon;
-  //
-  //   // 🔹 1. 주소 기반 요청
-  //   if (location != null && location.isNotEmpty) {
-  //     print("✅ 날씨 정보 받아오는 장소: $location");
-  //     try {
-  //       final loc = await locationFromAddress(location);
-  //       lat = loc.first.latitude;
-  //       lon = loc.first.longitude;
-  //       return await _fetchWeatherFromLatLng(lat, lon);
-  //     } catch (e) {
-  //       print("❗ 주소 변환 실패: $e");
-  //     }
-  //   }
-  //
-  // 🔹 2. location이 없거나 주소 변환 실패한 경우 → 현위치 요청
-  //   final hasPermission = await PermissionManager.isLocationPermissionGranted();
-  //   if (!hasPermission) {
-  //     print("📌 퍼미션 거부 → 서울로 대체");
-  //     return await _fetchWeatherFromLatLng(
-  //       _latitude,
-  //       _longitude,
-  //     ); // 서울 fallback
-  //   }
-  //   try {
-  //     final pos = await Geolocator.getCurrentPosition();
-  //     lat = pos.latitude;
-  //     lon = pos.longitude;
-  //     return await _fetchWeatherFromLatLng(lat, lon);
-  //   } catch (e) {
-  //     print("❗ 현위치 가져오기 실패 → 서울로 대체: $e");
-  //     return await _fetchWeatherFromLatLng(_latitude, _longitude);
-  //   }
-  // }
-
-  // Future<Map<String, int>> _fetchWeatherFromLatLng(
-  //   double lat,
-  //   double lon,
-  // ) async {
-  //   print("✅위치: $lat, $lon");
-  //   try {
-  //     final res = await http.get(
-  //       Uri.parse(
-  //         'https://api.openweathermap.org/data/3.0/onecall?lat=$lat&lon=$lon&exclude=current,minutely,hourly,alerts&units=metric&appid=${dotenv.env['OPENWEATHER_API_KEY']}',
-  //       ),
-  //     );
-  //
-  //     if (res.statusCode != 200) {
-  //       throw Exception("날씨 API 실패 (status: ${res.statusCode})");
-  //     }
-  //
-  //     final data = jsonDecode(res.body);
-  //     final tempMin = (data['main']['temp_min'] as num).toInt();
-  //     final tempMax = (data['main']['temp_max'] as num).toInt();
-  //
-  //     return {"min": tempMin, "max": tempMax};
-  //   } catch (e) {
-  //     print("❗ 위경도 기반 날씨 요청 실패: $e");
-  //     return {"min": 19, "max": 21}; // 안전한 fallback
-  //   }
-  // }
 
   Future<List<dynamic>> _fetchDailyWeatherFromLatLon(
     double lat,
     double lon,
   ) async {
-    print("✅ 날씨 정보 받아오는 위도/경도: $lat, $lon");
-
     try {
       final res = await http.get(
         Uri.parse(
@@ -270,10 +259,9 @@ class _RecommendationPageState extends State<RecommendationPage> {
       }
 
       final data = jsonDecode(res.body);
-      return data['daily']; // 🔹 8일치 날씨 예보 리스트만 반환
+      return data['daily'];
     } catch (e) {
-      print("❗ 날씨 요청 실패: $e");
-      return []; // 안전한 fallback
+      return [];
     }
   }
 
@@ -290,16 +278,6 @@ class _RecommendationPageState extends State<RecommendationPage> {
 
       if (date == targetDate) {
         return day;
-        // {
-        //   'min': (day['temp']['min'] as num).toInt(),
-        //   'max': (day['temp']['max'] as num).toInt(),
-        //   'description': day['weather'][0]['description'],
-        //   'main': day['weather'][0]['main'],
-        //   'icon': day['weather'][0]['icon'], // 날씨 아이콘 ID
-        //   'pop': ((day['pop'] ?? 0.0) as num), // 강수 확률 (0.0 ~ 1.0)
-        //   'uvi': day['uvi'],                  // 자외선 지수
-        //   'humidity': day['humidity'],        // 습도
-        // };
       }
     }
 
@@ -309,19 +287,14 @@ class _RecommendationPageState extends State<RecommendationPage> {
 
   void _onEventSelected(Event e) async {
     setState(() {
-      _selectedEvent = e;
       _selectedEventText = e.title;
       _analyzedResult = null;
     });
 
     // 일정 날짜 추출
-    _calTargetDate =
-        e.start?.toIso8601String().split("T")[0]; // 예: "2025-05-17"
+    _calTargetDate = e.start?.toIso8601String().split("T")[0];
 
-    if (_calTargetDate == null) {
-      print("⚠️ 일정 시작 시간이 없음->오늘로 설정");
-      _calTargetDate = DateTime.now().toIso8601String().split("T")[0];
-    }
+    _calTargetDate ??= DateTime.now().toIso8601String().split("T")[0];
 
     final analysis = await _analyzeWithGPT(e.title ?? '', e.description);
     final location = analysis['location'] ?? "";
@@ -330,9 +303,7 @@ class _RecommendationPageState extends State<RecommendationPage> {
       final loc = await locationFromAddress(location);
       _calLat = loc.first.latitude;
       _calLon = loc.first.longitude;
-    } catch (e) {
-      print("❗ 주소 변환 실패: $e");
-    }
+    } catch (_) {}
 
     setState(() {
       _analyzedResult = analysis;
@@ -341,7 +312,7 @@ class _RecommendationPageState extends State<RecommendationPage> {
 
   Widget _buildScheduleArea() {
     return GestureDetector(
-      behavior: HitTestBehavior.translucent, // 빈 공간까지 감지
+      behavior: HitTestBehavior.translucent,
       onVerticalDragStart: (details) {
         _dragStart = details.globalPosition;
       },
@@ -369,9 +340,31 @@ class _RecommendationPageState extends State<RecommendationPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
-
           children: [
-            Text("📅 일정 리스트:", style: TextStyle(fontWeight: FontWeight.bold)),
+            Row(
+              children: [
+                Text(
+                  "📅 일정 리스트:",
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+                SizedBox(width: 8),
+                Row(
+                  children: [
+                    Icon(
+                      _showEventList ? Icons.swipe_up : Icons.swipe_down,
+                      size: 16,
+                      color: Colors.grey,
+                    ),
+                    SizedBox(width: 4),
+                    Text(
+                      _showEventList ? "일정 숨기기" : "일정보기",
+                      style: TextStyle(color: Colors.grey),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+            SizedBox(height: 8),
 
             // 일정 리스트: 포커스 여부에 따라 숨김
             if (_showEventList)
@@ -387,27 +380,19 @@ class _RecommendationPageState extends State<RecommendationPage> {
                           onPressed: () => _onEventSelected(e),
                           style: TextButton.styleFrom(
                             backgroundColor: const Color.fromARGB(
-                              255,
-                              227,
-                              242,
-                              255,
+                              121,
+                              207,
+                              232,
+                              214,
                             ),
-                            // foregroundColor: Colors.black,
+                            foregroundColor: Color.fromARGB(255, 10, 59, 55),
                           ),
                           child: Text(e.title ?? "제목 없음"),
                         ),
                       );
                     }).toList(),
-              )
-            else
-              Row(
-                children: [
-                  Icon(Icons.swipe_down, size: 16, color: Colors.grey),
-                  SizedBox(width: 4),
-                  Text("일정 보기", style: TextStyle(color: Colors.grey)),
-                ],
               ),
-            SizedBox(height: 10),
+            if (_selectedEventText != null) SizedBox(height: 10),
             if (_selectedEventText != null)
               Row(
                 children: [
@@ -430,12 +415,24 @@ class _RecommendationPageState extends State<RecommendationPage> {
                   ),
                 ],
               ),
-            SizedBox(height: 8),
+            if (_customLocationName != null) SizedBox(height: 8),
             if (_customLocationName != null)
               Row(
                 children: [
-                  Text("📍 사용자 설정 위치: $_customLocationName"),
-                  SizedBox(width: 20),
+                  Text("📍 사용자 설정 위치: "),
+                  SizedBox(
+                    width: 150, // 텍스트가 보여질 최대 너비 지정
+                    height: 20,
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Text(
+                        _customLocationName ?? '',
+                        overflow: TextOverflow.visible,
+                        softWrap: false,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
                   SizedBox(
                     height: 20,
                     child: InkWell(
@@ -444,7 +441,7 @@ class _RecommendationPageState extends State<RecommendationPage> {
                           _customLocationName = null;
                         });
                       },
-                      child: Icon(
+                      child: const Icon(
                         Icons.cancel,
                         size: 18,
                         color: Colors.redAccent,
@@ -463,7 +460,7 @@ class _RecommendationPageState extends State<RecommendationPage> {
     Map<String, dynamic> requestData,
     String authToken,
   ) async {
-    final backendIp = dotenv.env['BACKEND_IP'] ?? 'default_ip_address';
+    final backendIp = dotenv.env['BACKEND_IP_REC'] ?? 'default_ip_address';
     final uri = Uri.parse("http://$backendIp:8080/api/outfit/recommend");
 
     try {
@@ -471,13 +468,9 @@ class _RecommendationPageState extends State<RecommendationPage> {
         uri,
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': authToken, // 보통은 'Bearer $authToken' 형태로
+          'Authorization': authToken,
         },
         body: jsonEncode(requestData),
-      );
-
-      print(
-        '🔐 최종 Authorization 헤더: ${response.request?.headers['Authorization']}',
       );
 
       if (response.statusCode == 200) {
@@ -486,18 +479,19 @@ class _RecommendationPageState extends State<RecommendationPage> {
             ? decoded.map((key, value) => MapEntry(key.toString(), value))
             : <String, dynamic>{};
       } else {
-        print("❌ 서버 오류: ${response.statusCode}");
-        print("📨 응답 본문: ${utf8.decode(response.bodyBytes)}");
         return {};
       }
     } catch (e) {
-      print("❗ 예외 발생: $e");
       return {};
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    // selectedWardrobeIds가 아직 준비되지 않았으면 로딩
+    if (!mounted) {
+      return const Center(child: CircularProgressIndicator());
+    }
     // final dateList = getDateList();
     return Scaffold(
       appBar: AppBar(
@@ -507,11 +501,6 @@ class _RecommendationPageState extends State<RecommendationPage> {
           },
           icon: Icon(Icons.arrow_back_rounded),
         ),
-        // title: Text(
-        //   'AD*RESS',
-        //   style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-        // ),
-        // centerTitle: true,
         actions: [
           GestureDetector(
             onTap: () {
@@ -544,14 +533,13 @@ class _RecommendationPageState extends State<RecommendationPage> {
             ),
             child: Text(
               _selectedDateText,
-              // style: TextStyle(color: Colors.black),
+              style: TextStyle(color: Colors.black, fontSize: 14),
             ),
           ),
           SizedBox(width: 15),
           IconButton(
             icon: Icon(Icons.map),
             onPressed: () {
-              print("✅ 지도보기 버튼 누름");
               Navigator.push(
                 context,
                 MaterialPageRoute(
@@ -576,9 +564,23 @@ class _RecommendationPageState extends State<RecommendationPage> {
           IconButton(
             onPressed: () {
               setState(() {
-                _effectiveMessages.clear(); // 전송용만 초기화 (채팅 화면은 그대로!)
+                _effectiveMessages.clear(); // 전송용만 초기화 (채팅 화면은 그대로)
+                _chatMessages.add(
+                  ChatMessage(
+                    text: '입력 내용이 초기화되었습니다.',
+                    type: ChatMessageType.system,
+                  ),
+                );
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  _scrollController.animateTo(
+                    _scrollController.position.maxScrollExtent,
+                    duration: Duration(milliseconds: 300),
+                    curve: Curves.easeOut,
+                  );
+                });
               });
             },
+
             icon: Icon(Icons.restart_alt),
           ),
         ],
@@ -586,17 +588,16 @@ class _RecommendationPageState extends State<RecommendationPage> {
 
       body: GestureDetector(
         onTap: () {
-          FocusScope.of(context).unfocus(); // 키보드 내리기
+          FocusScope.of(context).unfocus();
         },
-        behavior: HitTestBehavior.translucent, // 빈 공간도 인식되게
+        behavior: HitTestBehavior.translucent,
         child: Stack(
           children: [
             Column(
               children: [
-                // _buildScheduleArea(),
                 Expanded(
                   child: ChatMessageListView(
-                    topPadding: 200, // 헤더, 메세지 간격
+                    topPadding: 200,
                     messages: _chatMessages,
                     scrollController: _scrollController,
                   ),
@@ -622,12 +623,13 @@ class _RecommendationPageState extends State<RecommendationPage> {
                                   setState(() {
                                     final userMessage = ChatMessage(
                                       text: input,
-                                      isUser: true,
+                                      type: ChatMessageType.user,
                                     );
-                                    _chatMessages.add(userMessage); // 전체 채팅 출력용
-                                    _effectiveMessages.add(userMessage); // 전송용
+                                    _chatMessages.add(userMessage);
+                                    _effectiveMessages.add(userMessage);
                                     _userInputController.clear();
                                   });
+
                                   //스크롤
                                   WidgetsBinding.instance.addPostFrameCallback((
                                     _,
@@ -669,7 +671,6 @@ class _RecommendationPageState extends State<RecommendationPage> {
                                           return;
                                         }
 
-                                        // 📦 선택 결과 받기
                                         final result = await showModalBottomSheet<
                                           List<Item>
                                         >(
@@ -723,8 +724,6 @@ class _RecommendationPageState extends State<RecommendationPage> {
                                       ),
                                   ],
                                 ),
-
-                                // SizedBox(width: 2),
                                 /*옷장 선택*/
                                 WardrobeSelectorToggleButton(
                                   selectedWardrobeIds: selectedWardrobeIds,
@@ -756,21 +755,22 @@ class _RecommendationPageState extends State<RecommendationPage> {
                       /*결과보기 버튼: 날씨 정보 가져오기->서버로 전송*/
                       ElevatedButton(
                         onPressed: () async {
-                          FocusScope.of(context).unfocus(); // 🔹 키보드 먼저 내림
-                          if (_chatMessages.isEmpty) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text("입력을 먼저 해주세요.")),
-                            );
-                            return;
-                          }
+                          FocusScope.of(context).unfocus();
                           //로딩 카드 띄우기
                           setState(() {
                             _chatMessages.add(
                               ChatMessage(
-                                isUser: false,
+                                type: ChatMessageType.ai,
                                 customWidget: LoadingStyleCard(),
                               ),
                             );
+                            WidgetsBinding.instance.addPostFrameCallback((_) {
+                              _scrollController.animateTo(
+                                _scrollController.position.maxScrollExtent,
+                                duration: Duration(milliseconds: 300),
+                                curve: Curves.easeOut,
+                              );
+                            });
                           });
                           // 날씨 정보가 없음 -> 지도 선택 안했음!-> 일정 기반으로 가져오기 -> 현위치 기반
                           if (_weather == null || _weather!.isEmpty) {
@@ -794,7 +794,6 @@ class _RecommendationPageState extends State<RecommendationPage> {
                               final hasPermission =
                                   await PermissionManager.isLocationPermissionGranted();
                               if (!hasPermission) {
-                                print("📌 퍼미션 거부 → 서울로 대체");
                                 _weather = await _fetchDailyWeatherFromLatLon(
                                   _latitude,
                                   _longitude,
@@ -810,7 +809,6 @@ class _RecommendationPageState extends State<RecommendationPage> {
                                   lon,
                                 );
                               } catch (e) {
-                                print("❗ 현위치 가져오기 실패 → 서울로 대체: $e");
                                 _weather = await _fetchDailyWeatherFromLatLon(
                                   _latitude,
                                   _longitude,
@@ -820,11 +818,15 @@ class _RecommendationPageState extends State<RecommendationPage> {
                           }
 
                           final date =
-                              _selectedTargetDate ?? _calTargetDate ?? "";
+                              _selectedTargetDate ?? _calTargetDate ?? _nowDate;
+                          final String formattedDate = date.replaceAll(
+                            '-',
+                            '.',
+                          ); //2025-01-01 => 2025.01.01
+
                           if (_weather == null || _weather!.isEmpty) {
                             _ignoreWeather = true;
-                          } // 날씨 정보 못가져올 경우 대비
-                          else {
+                          } else {
                             final dailyWeather = extractFromWeather(
                               _weather!,
                               date,
@@ -838,16 +840,24 @@ class _RecommendationPageState extends State<RecommendationPage> {
                               _weatheDescription =
                                   dailyWeather['weather'][0]['description'];
                               _weatherSummary = dailyWeather['summary'];
+                              final main = dailyWeather['weather'][0]['main'];
 
-                              print(
-                                "🌧️ $date 날씨\n"
-                                "- 상태: $_weatheDescription\n"
-                                "- 최저기온: $_temperatureMin°\n"
-                                "- 최고기온: $_temperatureMax°\n"
-                                "- 강수확률: ${(pop * 100).round()}%\n",
-                              );
-                            } else {
-                              print("❗ 날씨 정보 없음");
+                              final weatherMessage =
+                                  translateWeatherDescription(
+                                    _weatheDescription!,
+                                    main,
+                                    formattedDate,
+                                  );
+                              if (!_ignoreWeather) {
+                                setState(() {
+                                  _chatMessages.add(
+                                    ChatMessage(
+                                      type: ChatMessageType.ai,
+                                      text: weatherMessage,
+                                    ),
+                                  );
+                                });
+                              }
                             }
                           }
 
@@ -859,24 +869,26 @@ class _RecommendationPageState extends State<RecommendationPage> {
 
                           // 사용자 입력 합치기
                           final combinedInput = _effectiveMessages
-                              .where((m) => m.isUser && m.text != null)
+                              .where(
+                                (m) =>
+                                    m.type == ChatMessageType.user &&
+                                    m.text != null,
+                              )
                               .map((m) => m.text!)
                               .join('\n');
 
                           final requestData = {
                             "minTemperature": _temperatureMin,
                             "maxTemperature": _temperatureMax,
-                            "requirements": combinedInput, // 사용자의 입력
+                            "requirements": combinedInput,
                             "uniqueCoordinationType":
                                 coordinationTypeMap[_selectedCoordinationType] ??
-                                "", // 영어로 변환
+                                "",
                             "schedule": _selectedEventText ?? "",
-                            "necessaryClothesIds":
-                                _selectedItems, //옷 id 넣기, null 가능
+                            "necessaryClothesIds": _selectedItems,
                             "wardrobeNames": selectedWardrobeIds,
                             "useBasicWardrobe": useBasicWardrobe,
                           };
-                          print('📨 $requestData');
 
                           final loginState = Provider.of<LoginStateManager>(
                             context,
@@ -885,18 +897,13 @@ class _RecommendationPageState extends State<RecommendationPage> {
 
                           final token = loginState.accessToken;
                           if (token == null) {
-                            print("❗ 로그인 토큰 없음. 로그인 먼저 필요.");
                             return;
                           }
-
-                          print("🔐 현재 불러온 토큰: $token");
-                          print("📨 보내는 정보: $requestData");
 
                           final responseData = await fetchRecommendation(
                             requestData,
                             'Bearer $token',
                           );
-                          print("📨 받는 정보: $responseData");
 
                           setState(() {
                             _chatMessages.removeWhere(
@@ -904,7 +911,7 @@ class _RecommendationPageState extends State<RecommendationPage> {
                             );
                             _chatMessages.add(
                               ChatMessage(
-                                isUser: false,
+                                type: ChatMessageType.ai,
                                 customWidget: StyleRecommendationView(
                                   responseData: responseData,
                                 ),
@@ -927,10 +934,7 @@ class _RecommendationPageState extends State<RecommendationPage> {
                           ),
                           minimumSize: Size(80, 80),
                         ),
-                        child: Text(
-                          "결과보기",
-                          // style: TextStyle(color: Colors.black),
-                        ),
+                        child: Text("결과보기"),
                       ),
                     ],
                   ),
@@ -938,7 +942,7 @@ class _RecommendationPageState extends State<RecommendationPage> {
               ],
             ),
 
-            // 🟫 헤더 영역 (슬라이드 가능하게 상단에 겹침)
+            // 헤더 영역 (슬라이드 가능하게 상단에 겹침)
             Positioned(
               top: _headerOffset,
               left: 0,
@@ -972,13 +976,11 @@ class _RecommendationPageState extends State<RecommendationPage> {
                       _isDateListVisible = false;
                     });
                   },
-                  child: Container(
-                    color: Colors.black.withOpacity(0.3), // 터치 가능, 시각적 구분
-                  ),
+                  child: Container(color: Colors.black.withOpacity(0.3)),
                 ),
               ),
               Positioned(
-                top: _headerOffset, // AppBar 바로 아래
+                top: _headerOffset,
                 left: 0,
                 right: 0,
                 height: MediaQuery.of(context).size.height * 0.21,
@@ -991,8 +993,8 @@ class _RecommendationPageState extends State<RecommendationPage> {
                         child: Text(
                           '날짜 선택',
                           style: TextStyle(
-                            fontSize: 14,
-                            // fontWeight: FontWeight.normal,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w500,
                           ),
                         ),
                       ),
@@ -1001,7 +1003,7 @@ class _RecommendationPageState extends State<RecommendationPage> {
                           padding: const EdgeInsets.all(12),
                           gridDelegate:
                               SliverGridDelegateWithFixedCrossAxisCount(
-                                crossAxisCount: 4, // 한 줄에 4개씩
+                                crossAxisCount: 4,
                                 mainAxisSpacing: 15,
                                 crossAxisSpacing: 12,
                                 childAspectRatio: 2.0,

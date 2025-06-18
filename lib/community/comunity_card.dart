@@ -148,7 +148,7 @@ class _CommunityPostCardState extends State<CommunityPostCard> {
           ),
         ),
 
-        const Divider(height: 1, thickness: 0.5), // 구분선
+        const Divider(height: 1, thickness: 0.5),
       ],
     );
   }

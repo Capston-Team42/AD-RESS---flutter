@@ -326,3 +326,197 @@ const Map<String, String> fieldLabels = {
   'isTopRequired': '상의 필요 여부',
 };
 String labelFor(String field) => fieldLabels[field] ?? field;
+
+const Map<String, Map<String, String>> categorizedLabelMapping = {
+  // ✅ 스타일 필드 (style1, style2, style3에 공통 적용)
+  'style1': {
+    'casual': '캐주얼',
+    'street': '스트리트',
+    'gorpcore': '고프코어',
+    'workwear': '워크웨어',
+    'preppy': '프레피',
+    'sporty': '스포티',
+    'romantic': '로맨틱',
+    'girlish': '걸리시',
+    'classic': '클래식',
+    'minimal': '미니멀',
+    'chic': '시크',
+    'retro': '레트로',
+    'ethnic': '에스닉',
+    'resort': '리조트',
+    'balletcore': '발레코어',
+  },
+  'style2': {
+    'casual': '캐주얼',
+    'street': '스트리트',
+    'gorpcore': '고프코어',
+    'workwear': '워크웨어',
+    'preppy': '프레피',
+    'sporty': '스포티',
+    'romantic': '로맨틱',
+    'girlish': '걸리시',
+    'classic': '클래식',
+    'minimal': '미니멀',
+    'chic': '시크',
+    'retro': '레트로',
+    'ethnic': '에스닉',
+    'resort': '리조트',
+    'balletcore': '발레코어',
+  },
+  'style3': {
+    'casual': '캐주얼',
+    'street': '스트리트',
+    'gorpcore': '고프코어',
+    'workwear': '워크웨어',
+    'preppy': '프레피',
+    'sporty': '스포티',
+    'romantic': '로맨틱',
+    'girlish': '걸리시',
+    'classic': '클래식',
+    'minimal': '미니멀',
+    'chic': '시크',
+    'retro': '레트로',
+    'ethnic': '에스닉',
+    'resort': '리조트',
+    'balletcore': '발레코어',
+  },
+
+  // ✅ 색상 관련
+  'color': {
+    'red': '빨강',
+    'orange': '주황',
+    'yellow': '노랑',
+    'light green': '연두',
+    'green': '초록',
+    'blue green': '청록',
+    'blue': '파랑',
+    'navy': '남색',
+    'purple': '보라',
+    'red purple': '자주',
+    'achromatic': '무채색',
+    'pink': '핑크',
+  },
+  'saturation': {
+    'high': '높음',
+    'medium': '중간',
+    'low': '낮음',
+    'achromatic': '무채색',
+  },
+  'brightness': {
+    'white': '하양',
+    'high': '밝음',
+    'medium': '중간',
+    'low': '어두움',
+    'black': '검정',
+  },
+
+  // ✅ 패턴
+  'pattern': {
+    'stripe': '스트라이프',
+    'check': '체크',
+    'flower': '꽃무늬',
+    'dot': '도트',
+    'patchwork': '패치워크',
+    'camouflage': '카모플라주',
+    'paisley': '페이즐리',
+    'tropical': '트로피컬',
+    'hound tooth': '하운드투스',
+    'herringbone': '헤링본',
+    'other pattern': '기타 패턴',
+    'plain': '무지',
+  },
+
+  // ✅ 계절
+  'season': {'spring': '봄', 'summer': '여름', 'autumn': '가을', 'winter': '겨울'},
+
+  // ✅ 상의 카테고리
+  'category': {
+    'sweatshirt': '맨투맨',
+    'hooded sweatshirt': '후드티',
+    'shirt/blouse': '셔츠/블라우스',
+    't-shirt': '티셔츠',
+    'knit': '니트',
+    'denim pants': '데님 팬츠',
+    'training pants': '트레이닝 팬츠',
+    'cotton pants': '면바지',
+    'suit pants/slack': '슬랙스',
+    'leggings': '레깅스',
+    'jumpsuit/overall': '점프수트/오버롤',
+    'hooded zip-up': '후드 집업',
+    'blouson/MA-1': '블루종/MA-1',
+    'leather/riders jacket': '가죽/라이더 자켓',
+    'cardigan': '가디건',
+    'trucker jacket': '트러커 자켓',
+    'suit/blazer jacket': '수트/블레이저 자켓',
+    'stadium jacket': '스타디움 자켓',
+    'nylon/coach jacket': '나일론/코치 자켓',
+    'anorak jacket': '아노락 자켓',
+    'training jacket': '트레이닝 자켓',
+    'season change coat': '간절기 코트',
+    'safari/hunting jacket': '사파리/헌팅 자켓',
+    'padding': '패딩',
+    'mustang/fur': '무스탕/퍼',
+    'fleece': '플리스',
+    'winter coat': '겨울 코트',
+    'tweed jacket': '트위드 자켓',
+  },
+
+  // ✅ 상의/아우터 길이
+  'topLength': {'half': '하프', 'crop': '크롭', 'regular': '레귤러', 'long': '롱'},
+
+  // ✅ 소매 길이
+  'sleeveLength': {
+    'sleeveless': '민소매',
+    'short sleeves': '반소매',
+    'three-quarter sleeves': '7부 소매',
+    'long sleeves': '긴소매',
+  },
+
+  // ✅ 핏
+  'fit': {'slim': '슬림핏', 'regular': '레귤러핏', 'oversize': '오버핏'},
+
+  // ✅ 바지 길이
+  'bottomLength': {
+    'shorts': '반바지',
+    'bermuda pants': '버뮤다 팬츠',
+    'capri pants': '카프리 팬츠',
+    'ankle pants': '복숭아뼈 길이',
+    'long pants': '긴바지',
+  },
+
+  // ✅ 바지 핏
+  'pantsFit': {
+    'wide': '와이드핏',
+    'straight': '스트레이트핏',
+    'tapered': '테이퍼드핏',
+    'slim/skinny': '슬림/스키니핏',
+    'boot cut': '부츠컷',
+    'baggy fit': '배기핏',
+    'jogger fit': '조거핏',
+  },
+
+  // ✅ 치마 길이
+  'skirtLength': {
+    'mini skirt': '미니스커트',
+    'midi skirt': '미디스커트',
+    'long skirt': '롱스커트',
+  },
+
+  // ✅ 치마 핏
+  'skirtFit': {
+    'a-line': 'A라인',
+    'h-line': 'H라인',
+    'balloon': '벌룬핏',
+    'pencil': '펜슬핏',
+  },
+
+  // ✅ 치마 유형
+  'skirtType': {
+    'pleats': '플리츠',
+    'wrap': '랩 스타일',
+    'tiered': '티어드',
+    'skirt pants': '치마바지',
+    'cancan': '캉캉',
+    'plain': '무지',
+  },
+};

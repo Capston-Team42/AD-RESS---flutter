@@ -60,45 +60,13 @@ class WardrobeMainPageState extends State<WardrobeMainPage> {
     );
   }
 
-  void _showRenameDialog(Wardrobe wardrobe) {
-    String newName = wardrobe.name;
-
-    showDialog(
-      context: context,
-      builder:
-          (context) => AlertDialog(
-            title: const Text('이름 변경'),
-            content: TextField(
-              decoration: const InputDecoration(hintText: '새 이름 입력'),
-              onChanged: (value) => newName = value,
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('취소'),
-              ),
-              ElevatedButton(
-                onPressed: () {
-                  Provider.of<WardrobeProvider>(
-                    context,
-                    listen: false,
-                  ).renameWardrobe(wardrobe.id, newName);
-                  Navigator.pop(context);
-                },
-                child: const Text('변경'),
-              ),
-            ],
-          ),
-    );
-  }
-
   void _confirmDelete(Wardrobe wardrobe) {
     showDialog(
       context: context,
       builder:
           (context) => AlertDialog(
-            title: const Text('정말 삭제하시겠어요?'),
-            content: Text('"${wardrobe.name}" 옷장이 삭제됩니다.'),
+            title: const Text('정말 삭제하시겠습니까?'),
+            content: Text('"${wardrobe.name}" 옷장의 아이템도 모두 삭제됩니다.'),
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(context),
@@ -144,7 +112,7 @@ class WardrobeMainPageState extends State<WardrobeMainPage> {
     final croppedFile = await ImageCropper().cropImage(
       sourcePath: pickedFile.path,
       compressFormat: ImageCompressFormat.jpg,
-      compressQuality: 80,
+      compressQuality: 60,
       uiSettings: [
         AndroidUiSettings(toolbarTitle: '이미지 자르기', lockAspectRatio: false),
         IOSUiSettings(title: '이미지 자르기'),
@@ -164,7 +132,11 @@ class WardrobeMainPageState extends State<WardrobeMainPage> {
 
   @override
   Widget build(BuildContext context) {
-    final wardrobeList = Provider.of<WardrobeProvider>(context).wardrobes;
+    final allWardrobe = Wardrobe(id: 'all', name: '전체 옷');
+    final wardrobeList = [
+      allWardrobe,
+      ...Provider.of<WardrobeProvider>(context).wardrobes,
+    ];
     final int crossAxisCount = 2;
     final bool isOdd = wardrobeList.length % crossAxisCount != 0;
 
@@ -176,24 +148,22 @@ class WardrobeMainPageState extends State<WardrobeMainPage> {
               child: Stack(
                 children: [
                   Center(child: Text(wardrobe.name)),
-                  Positioned(
-                    top: 0,
-                    right: 0,
-                    child: PopupMenuButton<String>(
-                      onSelected: (value) {
-                        if (value == 'edit') {
-                          _showRenameDialog(wardrobe);
-                        } else if (value == 'delete') {
-                          _confirmDelete(wardrobe);
-                        }
-                      },
-                      itemBuilder:
-                          (context) => const [
-                            PopupMenuItem(value: 'edit', child: Text('이름 변경')),
-                            PopupMenuItem(value: 'delete', child: Text('삭제')),
-                          ],
+                  if (wardrobe.id != 'all')
+                    Positioned(
+                      top: 0,
+                      right: 0,
+                      child: PopupMenuButton<String>(
+                        onSelected: (value) {
+                          if (value == 'delete') {
+                            _confirmDelete(wardrobe);
+                          }
+                        },
+                        itemBuilder:
+                            (context) => const [
+                              PopupMenuItem(value: 'delete', child: Text('삭제')),
+                            ],
+                      ),
                     ),
-                  ),
                 ],
               ),
             ),
@@ -240,7 +210,6 @@ class WardrobeMainPageState extends State<WardrobeMainPage> {
           Positioned(
             bottom: 16,
             left: 0,
-            // right: 0,
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [

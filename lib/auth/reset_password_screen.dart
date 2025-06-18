@@ -4,7 +4,7 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 
 class ResetPasswordScreen extends StatefulWidget {
-  final String token; // 이메일 링크에서 전달되는 토큰
+  final String token;
 
   const ResetPasswordScreen({super.key, required this.token});
 
@@ -21,6 +21,13 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
   Color _messageColor = Colors.red;
 
   Future<void> _resetPassword() async {
+    if (widget.token.trim().isEmpty) {
+      setState(() {
+        _message = '유효하지 않은 재설정 요청입니다.';
+        _messageColor = Colors.red;
+      });
+      return;
+    }
     final newPassword = _newPasswordController.text.trim();
     final confirmPassword = _confirmPasswordController.text.trim();
 
@@ -32,7 +39,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
       return;
     }
 
-    final backendIp = dotenv.env['BACKEND_IP'] ?? 'default_ip_address';
+    final backendIp = dotenv.env['BACKEND_IP_REC'] ?? 'default_ip_address';
     final uri = Uri.parse('http://$backendIp:8080/api/auth/reset-password');
     final response = await http.post(
       uri,
@@ -47,7 +54,9 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
         _message = data['message'] ?? '비밀번호가 성공적으로 재설정되었습니다.';
         _messageColor = Colors.green;
       });
-      // Navigator.pushReplacementNamed(context, '/signin');
+      Future.delayed(const Duration(seconds: 1), () {
+        Navigator.pushReplacementNamed(context, '/signin');
+      });
     } else {
       setState(() {
         _message = data['message'] ?? '비밀번호 재설정에 실패했습니다.';
@@ -77,7 +86,13 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
             const SizedBox(height: 20),
             ElevatedButton(
               onPressed: _resetPassword,
-              child: const Text('비밀번호 재설정'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Color.fromARGB(255, 13, 52, 3),
+              ),
+              child: const Text(
+                '비밀번호 재설정',
+                style: TextStyle(color: Colors.white),
+              ),
             ),
             const SizedBox(height: 12),
             Text(_message, style: TextStyle(color: _messageColor)),
