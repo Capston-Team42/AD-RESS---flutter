@@ -1,4 +1,4 @@
-# Flutter 클라이언트 - AD*RESS
+# AD*RESS: Flutter 클라이언트
 이 저장소는 `AD*RESS`의 Flutter 기반 모바일 애플리케이션 소스코드입니다.<br>`AD*RESS`는 백엔드 API와 연동하여 사용자 일정, 옷장 데이터, 추천 결과 등을 처리하는 클라이언트 앱입니다.
 
 ---
